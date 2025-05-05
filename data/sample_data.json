@@ -1,0 +1,14 @@
+[
+  {
+    "method": "def add(a, b):\n    return a + b\n\ndef test_add():\n    ",
+    "test": "assert add(1, 2) == 3"
+  },
+  {
+    "method": "def multiply(x, y):\n    return x * y\n\ndef test_multiply():\n    ",
+    "test": "assert multiply(3, 4) == 12"
+  },
+  {
+    "method": "def is_even(n):\n    return n % 2 == 0\n\ndef test_is_even():\n    ",
+    "test": "assert is_even(10) is True"
+  }
+]
