@@ -13,7 +13,7 @@ class MockTestGenDataset(Dataset):
     """
 
     def __init__(self, tokenizer: T5Tokenizer, max_len=64):
-        data_path = Path(__file__).parent.parent / "data" / "sample_data.json"
+        data_path = Path(__file__).resolve().parents[2] / "data" / "sample_data.json"
         with data_path.open("r") as f:
             self.samples = json.load(f)
 
@@ -24,7 +24,7 @@ class MockTestGenDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
         sample = self.samples[idx]
         src = sample['method']
         trg = sample['test']

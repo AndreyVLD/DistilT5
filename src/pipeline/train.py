@@ -2,7 +2,7 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from pipeline.model import StudentModel
+from .model import StudentModel
 
 
 def train(model: StudentModel, train_loader: DataLoader, optimizer: Optimizer, criterion: nn.Module, device: any,
@@ -25,7 +25,6 @@ def train(model: StudentModel, train_loader: DataLoader, optimizer: Optimizer, c
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
-            print(labels)
             teacher_logits = batch['teacher_logits'].to(device)
 
             optimizer.zero_grad()
