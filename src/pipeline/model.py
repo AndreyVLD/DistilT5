@@ -22,6 +22,7 @@ class DistillationLoss(nn.Module):
         Returns:
             Tensor: Computed loss.
         """
+
         # Compute softmax probabilities
         student_probs = F.log_softmax(student_logits / self.temperature, dim=-1)
         teacher_probs = F.softmax(teacher_logits / self.temperature, dim=-1)
@@ -42,7 +43,7 @@ class StudentModel(nn.Module):
     def __init__(self, tokenizer: T5Tokenizer) -> None:
         super().__init__()
         self.config = T5Config(
-            vocab_size=32128,
+            vocab_size=tokenizer.vocab_size,
             d_model=768,
             num_layers=6,
             num_heads=4,

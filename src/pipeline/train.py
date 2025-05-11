@@ -19,8 +19,10 @@ def train(model: StudentModel, train_loader: DataLoader, optimizer: Optimizer, c
         num_epochs (int): Number of epochs to train for.
     """
     model.train()
+
+    # TODO: Add tqdm progress bar
     for epoch in range(num_epochs):
-        total_loss = 0.0
+        epoch_loss = 0.0
         for batch in train_loader:
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
@@ -33,7 +35,7 @@ def train(model: StudentModel, train_loader: DataLoader, optimizer: Optimizer, c
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item()
+            epoch_loss += loss.item()
 
-        avg_loss = total_loss / len(train_loader)
+        avg_loss = epoch_loss / len(train_loader)
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.4f}")

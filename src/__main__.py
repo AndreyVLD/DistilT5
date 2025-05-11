@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import torch
 
 from transformers import AutoTokenizer
@@ -12,10 +10,10 @@ from pipeline.dataset import TestGenDataset
 
 
 def main() -> None:
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #
     # # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5-base")
+    tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5-small")
     #
     # # Load the dataset
     # dataset = MockTestGenDataset(tokenizer)
@@ -34,7 +32,9 @@ def main() -> None:
     dataset = TestGenDataset(tokenizer)
     sample = next(iter(dataset))
     print(sample)
+    print(sample["teacher_logits"].shape)
     print(tokenizer.decode(sample['input_ids'], skip_special_tokens=True))
+    print(tokenizer.decode(list(filter(lambda x: x != -100.0, sample['labels'].tolist())), skip_special_tokens=True))
 
 
 if __name__ == '__main__':
