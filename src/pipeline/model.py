@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from typing import Optional
 from torch import nn, Tensor
-from transformers import T5Config, T5ForConditionalGeneration, T5Tokenizer, AutoTokenizer, RobertaTokenizer
+from transformers import T5Config, T5ForConditionalGeneration, RobertaTokenizer
 from transformers.modeling_outputs import Seq2SeqLMOutput
 
 
@@ -79,7 +79,8 @@ class StudentModel(nn.Module):
             # Initialize a new model if no name is provided
             self.model = T5ForConditionalGeneration(config=self.config)
         else:
-            self.model = T5ForConditionalGeneration.from_pretrained(name, config=self.config)
+            self.model = T5ForConditionalGeneration.from_pretrained(name, config=self.config,
+                                                                    ignore_mismatched_sizes=True)
 
     def forward(self, input_ids: Tensor, attention_mask: Tensor, labels: Optional[Tensor]) -> Seq2SeqLMOutput:
         outputs: Seq2SeqLMOutput = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
@@ -95,28 +96,6 @@ class StudentModel(nn.Module):
         mem_bufs = sum([buf.nelement() * buf.element_size() for buf in self.buffers()])
         mem = mem_params + mem_bufs
         return mem / (1024 ** 2)  # Convert to MB
-
-    def predict_one(self, input_text: str, max_src_len: int, max_trg_len: int) -> str:
-        """
-        Generate predictions for a single input text.
-        Args:
-            input_text (str): Input text to generate predictions for.
-            max_src_len (int): Maximum source length for the input text.
-            max_trg_len (int): Maximum target length for the generated output.
-
-        Returns:
-            str: Generated output text.
-        """
-
-        inputs = self.tokenizer(input_text, return_tensors="pt", padding=True, truncation=True,
-                                max_length=max_src_len).input_ids
-
-        print(inputs)
-
-        outputs = self.model.generate(inputs)
-
-        print(outputs)
-        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     def save_model(self, path: str) -> None:
         """

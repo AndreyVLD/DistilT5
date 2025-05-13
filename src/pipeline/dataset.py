@@ -1,5 +1,6 @@
 import orjson
 import torch
+import javalang
 from transformers import RobertaTokenizer
 from typing import Optional, Any, TypedDict, Iterator
 from torch.utils.data import IterableDataset, Dataset
@@ -39,14 +40,27 @@ class AssertGenMixin:
         self.len = None
 
     def _process_raw(self, raw: RawEntry) -> Sample:
-        # TODO: Extend src with more context and information
-        #       input_text = f"FOCAL CODE:\n{item['focal_file']}\n\nTEST METHOD:\n{item['test_method_masked']}"
-        # src = raw['test_method_masked']
-        src = f"FOCAL CODE:\n{raw['focal_file']}\n\nTEST METHOD:\n{raw['test_method_masked']}"
+        method_name = raw["method_under_test"]
+        full_java = raw["focal_file"]
+        method_code = extract_method_via_ast(full_java, method_name)
+
+        src = f"METHOD UNDER TEST:\n{method_code}\n\nTEST METHOD:\n{raw['test_method_masked']}"
         trg = raw['teacher_prediction']
 
-        src_enc = self.tokenizer(src, padding='max_length', truncation=True, max_length=self.max_src_length,
-                                 return_tensors='pt')
+        # Temporarily switch to left truncation to avoid cutting the test method
+        old_side = self.tokenizer.truncation_side
+        self.tokenizer.truncation_side = "left"
+
+        src_enc = self.tokenizer(
+            src,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_src_length,
+            return_tensors="pt",
+        )
+
+        self.tokenizer.truncation_side = old_side
+
         trg_enc = self.tokenizer(trg, padding='max_length', truncation=True, max_length=self.max_trg_len,
                                  return_tensors='pt')
         gt = '\n'.join(raw['assertions'])
@@ -125,3 +139,39 @@ class MapAssertGenDataset(AssertGenMixin, Dataset):
     def __getitem__(self, idx: int) -> Sample:
         raw = self._data[idx]
         return self._process_raw(raw)
+
+
+def extract_method_via_ast(java_src: str, method_name: str) -> str:
+    """
+    Parse the Java source, find the MethodDeclaration whose .name == method_name,
+    then return its full text (from its start line through matching braces).
+    Handles potential JavaSyntaxError.
+    """
+    try:
+        # Parse into AST
+        tree = javalang.parse.parse(java_src)
+        # Read lines once
+        lines = java_src.splitlines(keepends=True)
+
+        for _, node in tree.filter(javalang.tree.MethodDeclaration):
+            if node.name == method_name:
+                # node.position gives (line, col) of the signature
+                start_line = node.position.line - 1
+                # Now walk forward to extract until braces balance
+                brace_count = 0
+                snippet_lines = []
+                for i, line in enumerate(lines[start_line:], start=start_line):
+                    snippet_lines.append(line)
+                    brace_count += line.count("{") - line.count("}")
+                    if brace_count == 0:
+                        break
+                return "".join(snippet_lines)
+
+    except javalang.parser.JavaSyntaxError as e:
+        # Return method name string to indicate parsing failed
+        return java_src
+    except Exception as e:
+        # Catch other potential exceptions during parsing
+        return java_src
+    
+    return method_name
