@@ -1,8 +1,10 @@
-from typing import Optional
-
+import json
+import os
+import torch
 import torch.nn.functional as F
+from typing import Optional
 from torch import nn, Tensor
-from transformers import T5Config, T5ForConditionalGeneration, T5Tokenizer
+from transformers import T5Config, T5ForConditionalGeneration, T5Tokenizer, AutoTokenizer, RobertaTokenizer
 from transformers.modeling_outputs import Seq2SeqLMOutput
 
 
@@ -14,7 +16,7 @@ class DistillationLoss(nn.Module):
 
     def forward(self, student_logits: Tensor, teacher_logits: Tensor, labels: Optional[Tensor] = None) -> Tensor:
         """
-        Compute the distillation loss.
+        Compute the distillation loss with safe handling of tensor shapes.
         Args:
             student_logits (Tensor): Logits from the student model.
             teacher_logits (Tensor): Logits from the teacher model.
@@ -22,38 +24,188 @@ class DistillationLoss(nn.Module):
         Returns:
             Tensor: Computed loss.
         """
+        # Handle potential shape differences between teacher and student logits
+        min_seq_len = min(student_logits.shape[1], teacher_logits.shape[1])
+
+        # Safely truncate both to matching sequence lengths
+        truncated_student_logits = student_logits[:, :min_seq_len, :]
+        truncated_teacher_logits = teacher_logits[:, :min_seq_len, :]
+
+        # Check if we have identical shapes after truncation
+        if truncated_student_logits.shape != truncated_teacher_logits.shape:
+            raise ValueError(
+                f"Shape mismatch after truncation: "
+                f"student={truncated_student_logits.shape}, teacher={truncated_teacher_logits.shape}"
+            )
 
         # Compute softmax probabilities
-        student_probs = F.log_softmax(student_logits / self.temperature, dim=-1)
-        teacher_probs = F.softmax(teacher_logits / self.temperature, dim=-1)
+        student_probs = F.log_softmax(truncated_student_logits / self.temperature, dim=-1)
+        teacher_probs = F.softmax(truncated_teacher_logits / self.temperature, dim=-1).detach()
 
         # Compute distillation loss
         distillation_loss = F.kl_div(student_probs, teacher_probs, reduction='batchmean') * (self.temperature ** 2)
 
         # Compute cross-entropy loss if labels are provided
         if labels is not None:
-            ce_loss = F.cross_entropy(student_logits.view(-1, student_logits.size(-1)), labels.view(-1),
-                                      ignore_index=-100)
+            # Make sure we're using the student logits directly (full sequence length) for CE loss
+            ce_loss = F.cross_entropy(
+                student_logits.view(-1, student_logits.size(-1)),
+                labels.view(-1),
+                ignore_index=-100
+            )
             return self.alpha * ce_loss + (1 - self.alpha) * distillation_loss
 
         return distillation_loss
 
 
+# TODO investigate different configurations for the model
 class StudentModel(nn.Module):
-    def __init__(self, tokenizer: T5Tokenizer) -> None:
+    def __init__(self, tokenizer: RobertaTokenizer, name: Optional[str]) -> None:
         super().__init__()
+        self.tokenizer = tokenizer
         self.config = T5Config(
             vocab_size=tokenizer.vocab_size,
-            d_model=768,
-            num_layers=6,
-            num_heads=4,
+            d_model=512,
+            num_layers=8,
+            num_heads=6,
             d_ff=2048,
             dropout_rate=0.1,
-            pad_token_id=tokenizer.pad_token_id,
             decoder_start_token_id=tokenizer.pad_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+            bos_token_id=tokenizer.bos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
         )
-        self.model = T5ForConditionalGeneration(self.config)
+        if name is None:
+            # Initialize a new model if no name is provided
+            self.model = T5ForConditionalGeneration(config=self.config)
+        else:
+            self.model = T5ForConditionalGeneration.from_pretrained(name, config=self.config)
 
-    def forward(self, input_ids: Tensor, attention_mask: Tensor, labels: Optional[Tensor] = None) -> Seq2SeqLMOutput:
+    def forward(self, input_ids: Tensor, attention_mask: Tensor, labels: Optional[Tensor]) -> Seq2SeqLMOutput:
         outputs: Seq2SeqLMOutput = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
         return outputs
+
+    def get_memory(self) -> float:
+        """
+        Get the memory usage of the model in MB.
+        Returns:
+            float: Memory usage in MB.
+        """
+        mem_params = sum([param.nelement() * param.element_size() for param in self.parameters()])
+        mem_bufs = sum([buf.nelement() * buf.element_size() for buf in self.buffers()])
+        mem = mem_params + mem_bufs
+        return mem / (1024 ** 2)  # Convert to MB
+
+    def predict_one(self, input_text: str, max_src_len: int, max_trg_len: int) -> str:
+        """
+        Generate predictions for a single input text.
+        Args:
+            input_text (str): Input text to generate predictions for.
+            max_src_len (int): Maximum source length for the input text.
+            max_trg_len (int): Maximum target length for the generated output.
+
+        Returns:
+            str: Generated output text.
+        """
+
+        inputs = self.tokenizer(input_text, return_tensors="pt", padding=True, truncation=True,
+                                max_length=max_src_len).input_ids
+
+        print(inputs)
+
+        outputs = self.model.generate(inputs)
+
+        print(outputs)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    def save_model(self, path: str) -> None:
+        """
+        Save the model, tokenizer and config to the specified path.
+        Args:
+            path (str): Path to save the model.
+        """
+        os.makedirs(path, exist_ok=True)
+
+        # Save model weights
+        torch.save(self.model.state_dict(), f"{path}/model.pt")
+
+        # Save tokenizer and config
+        self.tokenizer.save_pretrained(path)
+        self.model.config.save_pretrained(path)
+
+        # Save extra metadata
+        metadata = {
+            "memory_usage_mb": self.get_memory(),
+        }
+
+        with open(f"{path}/metadata.json", "w") as f:
+            json.dump(metadata, f)
+
+        print(f"Model, tokenizer and config saved to {path}")
+
+    @classmethod
+    def load_model(cls, path: str) -> 'StudentModel':
+        """
+        Load a saved model from disk
+
+        Args:
+            path: Directory path where the model and tokenizer are saved
+
+        Returns:
+            The loaded StudentModel instance
+        """
+        # Create model instance using the path
+        tokenizer = RobertaTokenizer.from_pretrained(path)
+        model = cls(tokenizer, None)
+
+        # Load saved weights
+        try:
+            state_dict = torch.load(f"{path}/model.pt")
+            model.model.load_state_dict(state_dict)
+            print(f"Model weights loaded from {path}/model.pt")
+        except Exception as e:
+            raise ValueError(f"Failed to load model weights: {str(e)}")
+
+        return model
+
+#     def save_model(self, path: str) -> None:
+#         """
+#         Save the model to the specified path.
+#         Args:
+#             path (str): Path to save the model.
+#         """
+#         os.makedirs(path, exist_ok=True)
+#         torch.save(self.state_dict(), f"{path}/model.pt")
+#         self.tokenizer.save_pretrained(path)
+#         self.model.config.save_pretrained(path)
+#         print(f"Model and tokenizer saved to {path}")
+#
+#
+# def load_model(path, tokenizer: Optional[T5Tokenizer]) -> tuple[StudentModel, T5Tokenizer]:
+#     """
+#     Load the model and tokenizer from disk
+#
+#     Args:
+#         path: Directory path where the model and tokenizer are saved
+#         tokenizer: The tokenizer to be used with the model
+#
+#     Returns:
+#         model: The loaded StudentModel instance
+#         tokenizer: The loaded tokenizer
+#
+#     """
+#     # Load tokenizer
+#
+#     try:
+#         tokenizer = AutoTokenizer.from_pretrained(path)
+#     except ValueError as error:
+#         print(f"Error loading tokenizer from {path}. Please check the path. {str(error)}")
+#
+#     # Initialize the model
+#     model = StudentModel(tokenizer)
+#
+#     # Load the saved state dict
+#     model.load_state_dict(torch.load(f"{path}/model.pt"))
+#
+#     print(f"Model and tokenizer loaded from {path}")
+#     return model, tokenizer

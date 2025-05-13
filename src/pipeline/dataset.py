@@ -1,18 +1,20 @@
-import json
+import orjson
 import torch
-from pathlib import Path
-from transformers import T5Tokenizer
+from transformers import RobertaTokenizer
 from typing import Optional, Any, TypedDict, Iterator
-from torch.utils.data import IterableDataset
+from torch.utils.data import IterableDataset, Dataset
 
 from utils.decompression import decompress_tensor_optimized
 
 
 class Sample(TypedDict):
+    original_text: str
+    ground_truth: str
     input_ids: torch.Tensor
     attention_mask: torch.Tensor
     labels: torch.Tensor
     teacher_logits: Optional[torch.Tensor]
+    teacher_labels: torch.Tensor
 
 
 class RawEntry(TypedDict):
@@ -27,52 +29,99 @@ class RawEntry(TypedDict):
     teacher_logits: Any
 
 
-class TestGenDataset(IterableDataset):
-    """
-    Dataset for assert generation.
-    This dataset is used to load and preprocess the data for training and evaluation.
-    """
-
-    def __init__(self, tokenizer: T5Tokenizer, file_name: str = "dataset_with_predictions.jsonl", max_src_length=64,
-                 max_trg_len=64):
-        self.file_path = Path(__file__).resolve().parents[2] / "data" / file_name
-
+class AssertGenMixin:
+    def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
+                 max_trg_len: int = 64) -> None:
+        self.file_path = file_path
         self.tokenizer = tokenizer
         self.max_src_length = max_src_length
         self.max_trg_len = max_trg_len
+        self.len = None
+
+    def _process_raw(self, raw: RawEntry) -> Sample:
+        # TODO: Extend src with more context and information
+        #       input_text = f"FOCAL CODE:\n{item['focal_file']}\n\nTEST METHOD:\n{item['test_method_masked']}"
+        # src = raw['test_method_masked']
+        src = f"FOCAL CODE:\n{raw['focal_file']}\n\nTEST METHOD:\n{raw['test_method_masked']}"
+        trg = raw['teacher_prediction']
+
+        src_enc = self.tokenizer(src, padding='max_length', truncation=True, max_length=self.max_src_length,
+                                 return_tensors='pt')
+        trg_enc = self.tokenizer(trg, padding='max_length', truncation=True, max_length=self.max_trg_len,
+                                 return_tensors='pt')
+        gt = '\n'.join(raw['assertions'])
+        gt_enc = self.tokenizer(gt, padding='max_length', truncation=True,
+                                max_length=self.max_trg_len,
+                                return_tensors='pt')
+
+        input_ids = src_enc['input_ids'].squeeze()
+        attention_mask = src_enc['attention_mask'].squeeze()
+        labels = gt_enc['input_ids'].squeeze()
+        teacher_labels = trg_enc['input_ids'].squeeze()
+
+        # Replace padding token id with -100 so it's ignored in loss computation
+        labels[labels == self.tokenizer.pad_token_id] = -100
+        teacher_labels[teacher_labels == self.tokenizer.pad_token_id] = -100
+
+        sample: Sample = {
+            'original_text': src,
+            'ground_truth': gt,
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'teacher_labels': teacher_labels,
+            'labels': labels,
+            'teacher_logits': None
+        }
+
+        if raw.get('teacher_logits') is not None:
+            sample['teacher_logits'] = decompress_tensor_optimized(raw['teacher_logits'])
+        return sample
+
+    def _iter_raws(self) -> Iterator[RawEntry]:
+        with open(self.file_path, "r") as f:
+            for line in f:
+                yield orjson.loads(line)
+
+
+class IterableAssertGenDataset(AssertGenMixin, IterableDataset):
+    """
+    Dataset for assert generation.
+    This dataset is used to load and preprocess the data for training and evaluation.
+    It loads the data from a JSONL lazily, processes it, and returns it in a format suitable for training.
+    """
+
+    def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
+                 max_trg_len: int = 64) -> None:
+        super().__init__(tokenizer, file_path, max_src_length, max_trg_len)
+        self._len = None
+
+    def __len__(self) -> int:
+        if self.len is None:
+            with open(self.file_path, 'r') as f:
+                self.len = sum(1 for _ in f)
+        return self.len
 
     def __iter__(self) -> Iterator[Sample]:
-        with open(self.file_path, 'r') as f:
-            for line in f:
-                raw: RawEntry = json.loads(line)
+        for raw in self._iter_raws():
+            yield self._process_raw(raw)
 
-                # TODO: Extend src with more context and information
-                #       input_text = f"FOCAL CODE:\n{item['focal_file']}\n\nTEST METHOD:\n{item['test_method_masked']}"
-                src = raw['test_method_masked']
-                trg = raw['teacher_prediction']
 
-                source_encoding = self.tokenizer(src, padding='max_length', truncation=True,
-                                                 max_length=self.max_src_length,
-                                                 return_tensors='pt')
-                target_encoding = self.tokenizer(trg, padding='max_length', truncation=True,
-                                                 max_length=self.max_trg_len,
-                                                 return_tensors='pt')
+class MapAssertGenDataset(AssertGenMixin, Dataset):
+    """
+    Dataset for assert generation.
+    This dataset is used to load and preprocess the data for training and evaluation.
+    It loads the data from a JSONL eagerly, processes it, and returns it in a format suitable for training.
+    """
 
-                input_ids = source_encoding['input_ids'].squeeze()
-                attention_mask = source_encoding['attention_mask'].squeeze()
-                labels = target_encoding['input_ids'].squeeze()
+    def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
+                 max_trg_len: int = 64) -> None:
+        super().__init__(tokenizer, file_path, max_src_length, max_trg_len)
+        # eagerly load everything into memory
+        self._data = list(self._iter_raws())
 
-                # Replace padding token id with -100 so it's ignored in loss computation
-                labels[labels == self.tokenizer.pad_token_id] = -100
+    def __len__(self) -> int:
+        return len(self._data)
 
-                sample: Sample = {
-                    'input_ids': input_ids,
-                    'attention_mask': attention_mask,
-                    'labels': labels,
-                    'teacher_logits': None
-                }
-
-                if raw.get('teacher_logits') is not None:
-                    sample['teacher_logits'] = decompress_tensor_optimized(raw['teacher_logits'])
-
-                yield sample
+    def __getitem__(self, idx: int) -> Sample:
+        raw = self._data[idx]
+        return self._process_raw(raw)

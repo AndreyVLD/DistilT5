@@ -1,40 +1,60 @@
-import torch
-
-from transformers import AutoTokenizer
-from torch.optim import AdamW
-
-from pipeline.model import StudentModel
-from pipeline.model import DistillationLoss
-from pipeline.train import train
-from pipeline.dataset import TestGenDataset
+from torch.utils.data import DataLoader
+from pipeline.dataset import MapAssertGenDataset
+from pipeline.train import DistillationConfig, DistillationTrainer
 
 
 def main() -> None:
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #
-    # # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5-small")
-    #
-    # # Load the dataset
-    # dataset = MockTestGenDataset(tokenizer)
-    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
-    #
-    # # Initialize the model
-    # student = StudentModel(tokenizer).to(device)
-    # student.config.use_cache = False
-    #
-    # # Initialize the optimizer and loss function
-    # criterion = DistillationLoss()
-    # optimizer = AdamW(student.parameters(), lr=1e-4)
-    #
-    # # Train the model
-    # train(student, dataloader, optimizer, criterion, device, num_epochs=5)
-    dataset = TestGenDataset(tokenizer)
-    sample = next(iter(dataset))
-    print(sample)
-    print(sample["teacher_logits"].shape)
-    print(tokenizer.decode(sample['input_ids'], skip_special_tokens=True))
-    print(tokenizer.decode(list(filter(lambda x: x != -100.0, sample['labels'].tolist())), skip_special_tokens=True))
+    config = DistillationConfig()
+    trainer = DistillationTrainer(config)
+
+    # Load the dataset
+    train_dataset = MapAssertGenDataset(
+        tokenizer=trainer.tokenizer,
+        file_path=config.dataset_path,
+        max_src_length=config.max_src_length,
+        max_trg_len=config.max_trg_len
+    )
+
+    # Create DataLoader
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=config.train_batch_size,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=True,
+    )
+
+    # Train the model
+    trainer.train(train_loader)
+
+    tokenizer = trainer.tokenizer
+    model = trainer.student_model
+
+    for sample in train_dataset:
+        tokenized_input = tokenizer(sample['original_text'], return_tensors="pt", padding=True, truncation=True,
+                                    max_length=config.max_src_length)
+        original_target = sample['ground_truth']
+
+        input_ids = tokenized_input['input_ids']
+        attention_mask = tokenized_input['attention_mask']
+
+        generated_ids = model.model.generate(input_ids=input_ids, attention_mask=attention_mask,
+                                             max_length=512, num_beams=4,
+                                             early_stopping=True)
+        generated_output = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+
+        with open("output.txt", "a", encoding="utf-8") as output_file:
+            output_file.write(f"Input: {sample['original_text']}\n")
+            output_file.write(f"Original target: {original_target}\n")
+            output_file.write(f"Generated output: \n {generated_output}\n")
+            output_file.write("------\n")
+
+        print("------")
+
+        print("Original target: ", original_target)
+        print("---")
+        print("Generated output: ", generated_output)
+        print("------")
 
 
 if __name__ == '__main__':

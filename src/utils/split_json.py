@@ -19,6 +19,8 @@ def split_jsonl(input_path: str, train_output: str, val_output: str, val_frac: f
     with input_path.open('r', encoding='utf-8') as f:
         total_lines = sum(1 for _ in f)
     split_idx = int(total_lines * (1 - val_frac))
+    
+    print(f"Splitting {total_lines} lines into {split_idx} for training and {total_lines - split_idx} for validation.")
 
     # Write splits
     with input_path.open('r', encoding='utf-8') as src_f, \
