@@ -58,8 +58,11 @@ class DistillationLoss(nn.Module):
         return distillation_loss
 
 
-# TODO investigate different configurations for the model
+# TODO investigate different configurations for the model T5
+# TODO investigate other pretrained models
 class StudentModel(nn.Module):
+    model: T5ForConditionalGeneration
+
     def __init__(self, tokenizer: RobertaTokenizer, name: Optional[str], use_pretrained: bool = False) -> None:
         super().__init__()
         self.tokenizer = tokenizer

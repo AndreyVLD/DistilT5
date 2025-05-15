@@ -217,7 +217,7 @@ class DistillationTrainer:
                 # Generate for subset
                 for idx in subset_indices:
                     # Generate
-                    generated_ids = self.student_model.generate(
+                    generated_ids = self.student_model.model.generate(
                         input_ids=input_ids[idx:idx + 1],
                         attention_mask=attention_mask[idx:idx + 1],
                         max_length=self.config.max_trg_length,
