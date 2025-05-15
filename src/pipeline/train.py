@@ -24,8 +24,8 @@ class DistillationConfig:
         self.max_trg_length = 512
 
         # Training
-        self.train_batch_size = 8
-        self.eval_batch_size = 16
+        self.train_batch_size = 16
+        self.eval_batch_size = 32
         self.learning_rate = 1e-4
         self.num_train_epochs = 5
         self.warmup_steps = 50
@@ -144,7 +144,7 @@ class DistillationTrainer:
 
                 # Evaluate the model
                 if self.config.eval_steps > 0 and global_step % self.config.eval_steps == 0 and global_step > 0:
-                    val_loss, eval_results = self.evaluate(train_loader)
+                    val_loss, eval_results = self.evaluate(eval_loader)
 
                     print(f"\nEvaluation at step {global_step}:")
                     print(f"  Loss: {val_loss:.4f}")
