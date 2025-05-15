@@ -5,7 +5,7 @@ from pathlib import Path
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import get_linear_schedule_with_warmup, RobertaTokenizer
+from transformers import get_linear_schedule_with_warmup, RobertaTokenizer, AutoTokenizer
 
 from utils.evaluation import evaluate_assertions
 from .model import StudentModel, DistillationLoss
@@ -27,7 +27,7 @@ class DistillationConfig:
         self.train_batch_size = 8
         self.eval_batch_size = 16
         self.learning_rate = 1e-4
-        self.num_train_epochs = 10
+        self.num_train_epochs = 5
         self.warmup_steps = 50
         self.weight_decay = 0.01
         self.temperature = 2.0  # Temperature for softening probability distributions
@@ -50,7 +50,7 @@ class DistillationTrainer:
         self.config = config
 
         # Initialize the tokenizer
-        self.tokenizer = RobertaTokenizer.from_pretrained(config.student_model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.student_model_name)
 
         # Initialize the model
         self.student_model = StudentModel(self.tokenizer, config.student_model_name, config.pretrained_model).to(
