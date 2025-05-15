@@ -24,8 +24,8 @@ class DistillationConfig:
         self.max_trg_length = 512
 
         # Training
-        self.train_batch_size = 16
-        self.eval_batch_size = 32
+        self.train_batch_size = 12
+        self.eval_batch_size = 16
         self.learning_rate = 1e-4
         self.num_train_epochs = 5
         self.warmup_steps = 50
