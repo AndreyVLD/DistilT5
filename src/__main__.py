@@ -10,7 +10,7 @@ def main() -> None:
     # Load the dataset
     train_dataset = MapAssertGenDataset(
         tokenizer=trainer.tokenizer,
-        file_path=config.dataset_path,
+        file_path=config.train_dataset_path,
         max_src_length=64,
         max_trg_len=config.max_trg_len
     )
@@ -20,12 +20,11 @@ def main() -> None:
     print("Decoded ground labels")
     print(
         trainer.tokenizer.decode(train_dataset[0]['labels'][train_dataset[0]['labels'] > 0], skip_special_tokens=False))
-    print("Decoded teacher labels")
-    print(trainer.tokenizer.decode(train_dataset[0]['teacher_labels'][train_dataset[0]['teacher_labels'] > 0],
-                                   skip_special_tokens=False))
+    print("Teacher labels")
+    print(train_dataset[0]['predicted_assertions'])
     print("Decoded ground truth")
-    print(train_dataset[0]['ground_truth'])
-    print("teacher logits")
+    print(train_dataset[0]['original_target'])
+    print("Teacher logits")
     print(train_dataset[0]['teacher_logits'].shape)
 
     # Create DataLoader

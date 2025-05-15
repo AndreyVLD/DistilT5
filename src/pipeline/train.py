@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 
 from torch.optim import AdamW
@@ -12,9 +14,11 @@ class DistillationConfig:
     def __init__(self) -> None:
         # Models
         self.student_model_name = "Salesforce/codet5-small"
+        self.pretrained_model = True
 
         # Dataset
-        self.dataset_path = "../data/val_split.jsonl"
+        self.train_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_training.jsonl"
+        self.eval_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_validation.jsonl"
         self.max_src_length = 1024
         self.max_trg_len = 128
 
@@ -26,7 +30,7 @@ class DistillationConfig:
         self.warmup_steps = 50
         self.weight_decay = 0.01
         self.temperature = 2.0  # Temperature for softening probability distributions
-        self.alpha = 0.7  # Weight for  task-specific loss vs distillation loss
+        self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
 
         # Output
         self.output_dir = "../distillation_output"
@@ -46,7 +50,8 @@ class DistillationTrainer:
         self.tokenizer = RobertaTokenizer.from_pretrained(config.student_model_name)
 
         # Initialize the model
-        self.student_model = StudentModel(self.tokenizer, config.student_model_name).to(config.device)
+        self.student_model = StudentModel(self.tokenizer, config.student_model_name, config.pretrained_model).to(
+            config.device)
         self.student_model.config.use_cache = False
 
         # Initialize loss function

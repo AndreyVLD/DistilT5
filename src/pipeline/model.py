@@ -53,14 +53,14 @@ class DistillationLoss(nn.Module):
                 labels.view(-1),
                 ignore_index=-100
             )
-            return self.alpha * ce_loss + (1 - self.alpha) * distillation_loss
+            return (1 - self.alpha) * ce_loss + self.alpha * distillation_loss
 
         return distillation_loss
 
 
 # TODO investigate different configurations for the model
 class StudentModel(nn.Module):
-    def __init__(self, tokenizer: RobertaTokenizer, name: Optional[str]) -> None:
+    def __init__(self, tokenizer: RobertaTokenizer, name: Optional[str], use_pretrained: bool = False) -> None:
         super().__init__()
         self.tokenizer = tokenizer
         self.config = T5Config(
@@ -78,9 +78,12 @@ class StudentModel(nn.Module):
         if name is None:
             # Initialize a new model if no name is provided
             self.model = T5ForConditionalGeneration(config=self.config)
-        else:
+        elif not use_pretrained:
             self.model = T5ForConditionalGeneration.from_pretrained(name, config=self.config,
                                                                     ignore_mismatched_sizes=True)
+        else:
+            # Load a pre-trained model without changing the config
+            self.model = T5ForConditionalGeneration.from_pretrained(name)
 
     def forward(self, input_ids: Tensor, attention_mask: Tensor, labels: Optional[Tensor]) -> Seq2SeqLMOutput:
         outputs: Seq2SeqLMOutput = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
