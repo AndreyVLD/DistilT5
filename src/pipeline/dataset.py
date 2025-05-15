@@ -157,8 +157,8 @@ class IterableAssertGenDataset(AssertGenMixin, IterableDataset):
     """
 
     def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
-                 max_trg_len: int = 64) -> None:
-        super().__init__(tokenizer, file_path, max_src_length, max_trg_len)
+                 max_trg_length: int = 64) -> None:
+        super().__init__(tokenizer, file_path, max_src_length, max_trg_length)
         self._len = None
 
     def __len__(self) -> int:
@@ -180,8 +180,8 @@ class MapAssertGenDataset(AssertGenMixin, Dataset):
     """
 
     def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
-                 max_trg_len: int = 64) -> None:
-        super().__init__(tokenizer, file_path, max_src_length, max_trg_len)
+                 max_trg_length: int = 64) -> None:
+        super().__init__(tokenizer, file_path, max_src_length, max_trg_length)
         # eagerly load everything into memory
         self._data = list(self._iter_raws())
 

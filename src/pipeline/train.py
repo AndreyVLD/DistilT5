@@ -33,6 +33,7 @@ class DistillationConfig:
         self.temperature = 2.0  # Temperature for softening probability distributions
         self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
         self.eval_steps = 500  # Steps between evaluations
+        self.num_workers = 8  # Number of workers for DataLoader
 
         # Output
         self.output_dir = Path(__file__).resolve().parents[2] / "output"
