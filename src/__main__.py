@@ -11,7 +11,7 @@ def main() -> None:
     train_dataset = MapAssertGenDataset(
         tokenizer=trainer.tokenizer,
         file_path=config.train_dataset_path,
-        max_src_length=64,
+        max_src_length=config.max_src_length,
         max_trg_len=config.max_trg_len
     )
 

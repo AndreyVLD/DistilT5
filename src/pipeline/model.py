@@ -150,19 +150,19 @@ class StudentModel(nn.Module):
 
         return model
 
-#     def save_model(self, path: str) -> None:
-#         """
-#         Save the model to the specified path.
-#         Args:
-#             path (str): Path to save the model.
-#         """
-#         os.makedirs(path, exist_ok=True)
-#         torch.save(self.state_dict(), f"{path}/model.pt")
-#         self.tokenizer.save_pretrained(path)
-#         self.model.config.save_pretrained(path)
-#         print(f"Model and tokenizer saved to {path}")
-#
-#
+    # def save_model(self, path: str) -> None:
+    #     """
+    #     Save the model to the specified path.
+    #     Args:
+    #         path (str): Path to save the model.
+    #     """
+    #     os.makedirs(path, exist_ok=True)
+    #     torch.save(self.state_dict(), f"{path}/model.pt")
+    #     self.tokenizer.save_pretrained(path)
+    #     self.model.config.save_pretrained(path)
+    #     print(f"Model and tokenizer saved to {path}")
+    #
+
 # def load_model(path, tokenizer: Optional[T5Tokenizer]) -> tuple[StudentModel, T5Tokenizer]:
 #     """
 #     Load the model and tokenizer from disk
