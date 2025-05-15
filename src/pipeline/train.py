@@ -96,6 +96,7 @@ class DistillationTrainer:
 
         # Create metrics file
         metrics_file = self.config.output_dir / "metrics.csv"
+        metrics_file.parent.mkdir(parents=True, exist_ok=True)
         with open(metrics_file, "w") as f:
             f.write("epoch,global_step,train_loss,eval_loss,accuracy,similarity,f1,precision,recall\n")
 
