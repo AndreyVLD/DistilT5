@@ -1,11 +1,18 @@
 import json
 import os
+from enum import Enum
+
 import torch
 import torch.nn.functional as F
 from typing import Optional
 from torch import nn, Tensor
-from transformers import T5Config, T5ForConditionalGeneration, RobertaTokenizer
+from transformers import T5Config, T5ForConditionalGeneration, RobertaTokenizer, AutoTokenizer
 from transformers.modeling_outputs import Seq2SeqLMOutput
+
+
+class ModelType(Enum):
+    CODET5PLUS = "codet5plus"
+    CODET5 = "codet5"
 
 
 class DistillationLoss(nn.Module):
@@ -129,68 +136,33 @@ class StudentModel(nn.Module):
         print(f"Model, tokenizer and config saved to {path}")
 
     @classmethod
-    def load_model(cls, path: str) -> 'StudentModel':
+    def load_model(cls, path: str, model_type: ModelType) -> 'StudentModel':
         """
         Load a saved model from disk
 
         Args:
             path: Directory path where the model and tokenizer are saved
+            model_type: The type of model to load (e.g., CODET5, CODET5PLUS)
 
         Returns:
             The loaded StudentModel instance
         """
         # Create model instance using the path
-        tokenizer = RobertaTokenizer.from_pretrained(path)
-        model = cls(tokenizer, None)
+        if model_type == ModelType.CODET5:
+            tokenizer = RobertaTokenizer.from_pretrained(path)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(path)
+
+        student_model = cls(tokenizer, None)
 
         # Load saved weights
         try:
             state_dict = torch.load(f"{path}/model.pt")
-            model.model.load_state_dict(state_dict)
+            config = T5Config.from_pretrained(path)
+            student_model.model = T5ForConditionalGeneration(config=config)
+            student_model.model.load_state_dict(state_dict)
             print(f"Model weights loaded from {path}/model.pt")
         except Exception as e:
             raise ValueError(f"Failed to load model weights: {str(e)}")
 
-        return model
-
-    # def save_model(self, path: str) -> None:
-    #     """
-    #     Save the model to the specified path.
-    #     Args:
-    #         path (str): Path to save the model.
-    #     """
-    #     os.makedirs(path, exist_ok=True)
-    #     torch.save(self.state_dict(), f"{path}/model.pt")
-    #     self.tokenizer.save_pretrained(path)
-    #     self.model.config.save_pretrained(path)
-    #     print(f"Model and tokenizer saved to {path}")
-    #
-
-# def load_model(path, tokenizer: Optional[T5Tokenizer]) -> tuple[StudentModel, T5Tokenizer]:
-#     """
-#     Load the model and tokenizer from disk
-#
-#     Args:
-#         path: Directory path where the model and tokenizer are saved
-#         tokenizer: The tokenizer to be used with the model
-#
-#     Returns:
-#         model: The loaded StudentModel instance
-#         tokenizer: The loaded tokenizer
-#
-#     """
-#     # Load tokenizer
-#
-#     try:
-#         tokenizer = AutoTokenizer.from_pretrained(path)
-#     except ValueError as error:
-#         print(f"Error loading tokenizer from {path}. Please check the path. {str(error)}")
-#
-#     # Initialize the model
-#     model = StudentModel(tokenizer)
-#
-#     # Load the saved state dict
-#     model.load_state_dict(torch.load(f"{path}/model.pt"))
-#
-#     print(f"Model and tokenizer loaded from {path}")
-#     return model, tokenizer
+        return student_model

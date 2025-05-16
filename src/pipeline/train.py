@@ -1,7 +1,11 @@
+from typing import Optional
+
 import numpy as np
 import torch
 
 from pathlib import Path
+
+from torch import nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -41,11 +45,13 @@ class DistillationConfig:
 
 
 class DistillationTrainer:
-    def __init__(self, config: DistillationConfig) -> None:
+    def __init__(self, config: DistillationConfig, model: Optional[StudentModel]) -> None:
         """
         Initialize the DistillationTrainer with the provided configuration.
         Args:
             config (DistillationConfig): Configuration object containing training parameters.
+            model (nn.Module): Pre-trained model to be used for distillation. If None, a new model will be created.
+                               Useful for loading an already trained model for evaluation
         """
         self.config = config
 
@@ -53,8 +59,11 @@ class DistillationTrainer:
         self.tokenizer = AutoTokenizer.from_pretrained(config.student_model_name)
 
         # Initialize the model
-        self.student_model = StudentModel(self.tokenizer, config.student_model_name, config.pretrained_model).to(
-            config.device)
+        if model is not None:
+            self.student_model = model.to(config.device)
+        else:
+            self.student_model = StudentModel(self.tokenizer, config.student_model_name, config.pretrained_model).to(
+                config.device)
         self.student_model.config.use_cache = False
 
         # Initialize loss function
@@ -180,6 +189,9 @@ class DistillationTrainer:
         Args:
             eval_loader (DataLoader): DataLoader for evaluation data.
             use_teacher_pred (bool): Whether to use teacher predictions for evaluation.
+
+        Returns:
+            tuple: A tuple containing the average loss and evaluation results.
         """
         self.student_model.eval()
         eval_loss = 0.0
