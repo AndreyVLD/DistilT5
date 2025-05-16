@@ -3,7 +3,7 @@ import re
 from difflib import SequenceMatcher
 
 
-def normalize_assertion(assertion):
+def normalize_assertion(assertion: str) -> str:
     """Normalize assertion text for more reliable comparison"""
     # Remove whitespace
     assertion = re.sub(r'\s+', ' ', assertion).strip()
@@ -17,7 +17,7 @@ def normalize_assertion(assertion):
     return assertion
 
 
-def calculate_similarity(reference, candidate):
+def calculate_similarity(reference: str, candidate: str) -> float:
     """Calculate string similarity using SequenceMatcher"""
     return SequenceMatcher(None, reference, candidate).ratio()
 

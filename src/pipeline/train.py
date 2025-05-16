@@ -5,7 +5,7 @@ from pathlib import Path
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import get_linear_schedule_with_warmup, RobertaTokenizer, AutoTokenizer
+from transformers import get_linear_schedule_with_warmup, AutoTokenizer
 
 from utils.evaluation import evaluate_assertions
 from .model import StudentModel, DistillationLoss
@@ -32,7 +32,7 @@ class DistillationConfig:
         self.weight_decay = 0.01
         self.temperature = 2.0  # Temperature for softening probability distributions
         self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
-        self.eval_steps = 500  # Steps between evaluations
+        self.eval_steps = 0  # Steps between evaluations
         self.num_workers = 8  # Number of workers for DataLoader
 
         # Output
@@ -100,7 +100,6 @@ class DistillationTrainer:
         with open(metrics_file, "w") as f:
             f.write("epoch,global_step,train_loss,eval_loss,accuracy,similarity,f1,precision,recall\n")
 
-        # TODO: Enhance tqdm progress bar
         for epoch in range(self.config.num_train_epochs):
             epoch_loss = 0.0
             batch_losses = []
@@ -174,11 +173,13 @@ class DistillationTrainer:
             path = self.config.output_dir / f"epoch_{epoch + 1}"
             self.student_model.save_model(str(path))
 
-    def evaluate(self, eval_loader: DataLoader) -> tuple[float, dict[str, float | list[float]]]:
+    def evaluate(self, eval_loader: DataLoader, use_teacher_pred: bool = False) -> (
+            tuple)[float, dict[str, float | list[float]]]:
         """
         Evaluate the model using the provided DataLoader.
         Args:
             eval_loader (DataLoader): DataLoader for evaluation data.
+            use_teacher_pred (bool): Whether to use teacher predictions for evaluation.
         """
         self.student_model.eval()
         eval_loss = 0.0
@@ -191,13 +192,15 @@ class DistillationTrainer:
             "f1_scores": []
         }
 
+        progress_bar = tqdm(eval_loader, desc="Evaluating")
         with torch.no_grad():
-            for batch in tqdm(eval_loader, desc="Evaluating"):
+            for batch in progress_bar:
 
                 # Move batch to device
                 input_ids = batch["input_ids"].to(self.config.device)
                 attention_mask = batch["attention_mask"].to(self.config.device)
                 labels = batch["labels"].to(self.config.device)
+                teacher_logits = batch['teacher_logits'].to(self.config.device)
 
                 # Forward pass
                 outputs = self.student_model(
@@ -207,7 +210,7 @@ class DistillationTrainer:
                 )
 
                 # Track loss
-                loss = outputs.loss
+                loss = self.criterion(outputs.logits, teacher_logits, labels=labels)
                 eval_loss += loss.item()
 
                 # Generate predictions for a subset of examples to save time
@@ -227,7 +230,11 @@ class DistillationTrainer:
 
                     # Decode prediction and reference
                     generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
-                    reference_text = batch["original_target"][idx]
+
+                    if use_teacher_pred:
+                        reference_text = batch["predicted_assertions"][idx]
+                    else:
+                        reference_text = batch["original_target"][idx]
 
                     # Evaluate
                     metrics = evaluate_assertions(generated_text, reference_text)
