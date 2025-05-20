@@ -74,8 +74,8 @@ def train() -> None:
 
 def main() -> None:
     # Uncomment the function you want to run
-    # train()
-    evaluate()
+    train()
+    # evaluate()
 
 
 if __name__ == '__main__':

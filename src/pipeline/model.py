@@ -75,10 +75,11 @@ class StudentModel(nn.Module):
         self.tokenizer = tokenizer
         self.config = T5Config(
             vocab_size=tokenizer.vocab_size,
-            d_model=512,
-            num_layers=8,
-            num_heads=6,
-            d_ff=2048,
+            d_model=256,
+            num_layers=4,
+            num_decoder_layers=4,
+            num_heads=4,
+            d_ff=1024,
             dropout_rate=0.1,
             decoder_start_token_id=tokenizer.pad_token_id,
             pad_token_id=tokenizer.pad_token_id,
@@ -89,6 +90,7 @@ class StudentModel(nn.Module):
             # Initialize a new model if no name is provided
             self.model = T5ForConditionalGeneration(config=self.config)
         elif not use_pretrained:
+            # If not using a pretrained model, initialize a new one and inherit weights from the provided name
             self.model = T5ForConditionalGeneration.from_pretrained(name, config=self.config,
                                                                     ignore_mismatched_sizes=True)
         else:

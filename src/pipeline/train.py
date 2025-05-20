@@ -19,7 +19,7 @@ class DistillationConfig:
     def __init__(self) -> None:
         # Models
         self.student_model_name = "Salesforce/codet5-small"
-        self.pretrained_model = True
+        self.pretrained_model = False
 
         # Dataset
         self.train_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_training.jsonl"
@@ -28,19 +28,20 @@ class DistillationConfig:
         self.max_trg_length = 512
 
         # Training
-        self.train_batch_size = 12
-        self.eval_batch_size = 16
+        self.train_batch_size = 32
+        self.eval_batch_size = 64
         self.learning_rate = 1e-4
-        self.num_train_epochs = 5
+        self.num_train_epochs = 10
         self.warmup_steps = 50
         self.weight_decay = 0.01
         self.temperature = 2.0  # Temperature for softening probability distributions
         self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
-        self.eval_steps = 0  # Steps between evaluations
+        self.eval_steps = 0  # Steps between evaluations (in a single epoch)
+        self.eval_epochs = 25  # Number of epochs between evaluations
         self.num_workers = 8  # Number of workers for DataLoader
 
         # Output
-        self.output_dir = Path(__file__).resolve().parents[2] / "output"
+        self.output_dir = Path(__file__).resolve().parents[2] / "output_mini_test"
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -80,7 +81,13 @@ class DistillationTrainer:
         self.student_model.train()
 
         total_steps = len(train_loader) * self.config.num_train_epochs
+        self.config.warmup_steps = int(total_steps * 0.1)  # 10% of total steps for warmup
         global_step = 0
+
+        # Log some info
+        print(f"    Total training steps: {total_steps}")
+        print(f"    Warmup steps: {self.config.warmup_steps}")
+        print(f"    Memory usage: {self.student_model.get_memory()} MB")
 
         # Initialize optimizer and scheduler
         no_decay = ["bias", "LayerNorm.weight"]
@@ -164,19 +171,21 @@ class DistillationTrainer:
             avg_loss = epoch_loss / len(train_loader)
             print(f"Epoch {epoch + 1}/{self.config.num_train_epochs}, Loss: {avg_loss:.4f}")
 
-            # Evaluate the model at end of epoch
-            print(f"  Evaluating epoch {epoch + 1}...")
-            val_loss, eval_results = self.evaluate(eval_loader)
+            # Evaluate the model
+            if ((epoch % self.config.eval_epochs == 0 or epoch == self.config.num_train_epochs - 1)
+                    and self.config.eval_epochs > 0 and epoch > 0):
+                print(f"  Evaluating epoch {epoch + 1}...")
+                val_loss, eval_results = self.evaluate(eval_loader)
 
-            with open(metrics_file, "a") as f:
-                f.write(f"{epoch + 1},{global_step},{avg_loss:.6f},{val_loss:.6f},"
-                        f"{eval_results['accuracy']:.6f},{eval_results['similarity_score_avg']:.6f},"
-                        f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f}\n")
+                with open(metrics_file, "a") as f:
+                    f.write(f"{epoch + 1},{global_step},{avg_loss:.6f},{val_loss:.6f},"
+                            f"{eval_results['accuracy']:.6f},{eval_results['similarity_score_avg']:.6f},"
+                            f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f}\n")
 
-            print(f"  Validation loss: {val_loss:.4f}")
-            print(f"  Similarity score: {eval_results['similarity_score_avg']:.4f}")
-            print(f"  Accuracy: {eval_results['accuracy']:.4f}")
-            print(f"  F1 score: {eval_results['f1']:.4f}")
+                print(f"  Validation loss: {val_loss:.4f}")
+                print(f"  Similarity score: {eval_results['similarity_score_avg']:.4f}")
+                print(f"  Accuracy: {eval_results['accuracy']:.4f}")
+                print(f"  F1 score: {eval_results['f1']:.4f}")
 
             # Save Model
             path = self.config.output_dir / f"epoch_{epoch + 1}"
