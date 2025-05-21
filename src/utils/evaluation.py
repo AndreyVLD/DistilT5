@@ -1,6 +1,8 @@
 import re
+import orjson
 
 from difflib import SequenceMatcher
+from tqdm import tqdm
 
 
 def normalize_assertion(assertion: str) -> str:
@@ -90,3 +92,80 @@ def evaluate_assertions(generated_assertions: str | list[str], reference_asserti
         "similarity_score_avg": sum(similarity_scores) / len(similarity_scores) if similarity_scores else 0,
         "similarity_scores": similarity_scores
     }
+
+
+def evaluate_teacher(file_path: str) -> dict[str, float]:
+    """
+    Evaluate the teacher model assertions by comparing generated assertions with reference assertions.
+    Args:
+        file_path (str): Path to the JSONL file containing the data. It needs to have the following fields:
+            - "original_target": The original target assertions.
+            - "predicted_assertions": The generated assertions from the teacher model.
+    Returns:
+        dict: A dictionary containing the evaluation metrics:
+            - precision
+            - recall
+            - f1
+            - accuracy
+            - similarity_score_avg
+            - total_exact_matches
+            - total_generated
+            - total_reference
+    """
+
+    all_metrics = {
+        "exact_matches": 0,
+        "generated_count": 0,
+        "reference_count": 0,
+        "similarity_scores": [],
+        "accuracy_scores": [],
+        "f1_scores": []
+    }
+
+    with open(file_path, 'r') as f:
+        data = [orjson.loads(line) for line in f]
+
+    for entry in tqdm(data, desc="Evaluating teacher model assertions"):
+        # Extract assertions
+        reference_assertions = entry.get("original_target", "")
+        generated_assertions = entry.get("predicted_assertions", "")
+
+        # Evaluate assertions
+        metrics = evaluate_assertions(generated_assertions, reference_assertions)
+
+        # Update overall metrics
+        all_metrics["exact_matches"] += metrics["exact_matches"]
+        all_metrics["generated_count"] += metrics["generated_count"]
+        all_metrics["reference_count"] += metrics["reference_count"]
+        all_metrics["similarity_scores"].extend(metrics["similarity_scores"])
+        all_metrics["accuracy_scores"].append(metrics["accuracy"])
+        all_metrics["f1_scores"].append(metrics["f1"])
+
+    if not all_metrics["similarity_scores"]:
+        return {"precision": 0, "recall": 0, "f1": 0, "accuracy": 0, "similarity_score_avg": 0}
+
+    # Calculate aggregate metrics
+    overall_precision = all_metrics["exact_matches"] / all_metrics["generated_count"] if all_metrics[
+        "generated_count"] else 0
+    overall_recall = all_metrics["exact_matches"] / all_metrics["reference_count"] if all_metrics[
+        "reference_count"] else 0
+    overall_f1 = 2 * overall_precision * overall_recall / (overall_precision + overall_recall) \
+        if (overall_precision + overall_recall) > 0 else 0
+
+    # Average per-sample metrics
+    avg_similarity = sum(all_metrics["similarity_scores"]) / len(all_metrics["similarity_scores"])
+    avg_accuracy = sum(all_metrics["accuracy_scores"]) / len(all_metrics["accuracy_scores"]) if all_metrics[
+        "accuracy_scores"] else 0
+
+    results = {
+        "precision": overall_precision,
+        "recall": overall_recall,
+        "f1": overall_f1,
+        "accuracy": avg_accuracy,
+        "similarity_score_avg": avg_similarity,
+        "total_exact_matches": all_metrics["exact_matches"],
+        "total_generated": all_metrics["generated_count"],
+        "total_reference": all_metrics["reference_count"]
+    }
+
+    return results

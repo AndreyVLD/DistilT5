@@ -282,10 +282,7 @@ class DistillationTrainer:
 
         # Handle empty metrics
         if not all_metrics["similarity_scores"]:
-            return avg_loss, {
-                "precision": 0, "recall": 0, "f1": 0, "accuracy": 0,
-                "similarity_score_avg": 0
-            }
+            return avg_loss, {"precision": 0, "recall": 0, "f1": 0, "accuracy": 0, "similarity_score_avg": 0}
 
         # Calculate aggregate metrics
         overall_precision = all_metrics["exact_matches"] / all_metrics["generated_count"] if all_metrics[

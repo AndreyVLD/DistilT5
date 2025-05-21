@@ -6,3 +6,4 @@ numpy~=2.2.5
 tqdm~=4.67.1
 orjson~=3.10.18
 lz4
+matplotlib~=3.10.3

@@ -1,13 +1,9 @@
-from utils.split_json import split_jsonl
+from utils.evaluation import evaluate_teacher
 
 
 def main() -> None:
-    split_jsonl(
-        input_path="../../data/dataset_with_predictions.jsonl",
-        train_output="../../data/train_split.jsonl",
-        val_output="../../data/val_split.jsonl",
-        val_frac=0.2
-    )
+    output = evaluate_teacher('../../data/distillation_data_validation.jsonl')
+    print(output)
 
 
 if __name__ == '__main__':
