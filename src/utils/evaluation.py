@@ -1,13 +1,13 @@
 import logging
 import re
 import orjson
-from difflib import SequenceMatcher
-
+import code_bert_score
 import torch
+from rouge_score import rouge_scorer
+from difflib import SequenceMatcher
 from tqdm import tqdm
 from typing import TypedDict, Callable, cast
 from codebleu import calc_codebleu
-import code_bert_score
 
 # Only show ERROR+ messages, hide WARNINGs (including the data-flow error from codebleu)
 logging.getLogger().setLevel(logging.ERROR)
@@ -26,8 +26,9 @@ class AssertionEvalResult(TypedDict):
     accuracy: float  # exact match / max(generated_count, reference_count)
     similarity_score_avg: float  # mean of best per-assertion similarity scores
     similarity_scores: list[float]  # list of best similarity per generated assertion
-    codeblue_score: float  # mean of CodeBLEU scores
-    codebert_score: float  # mean of CodeBERT scores
+    codeblue_score: float  # CodeBLEU score
+    codebert_score: float  # CodeBERT score
+    rougeL: float  # ROUGE-L score
     # Add new metrics here as needed, e.g.:
 
 
@@ -42,6 +43,7 @@ class ComputeAllResult(TypedDict):
     similarity_score_avg: float  # mean of per‐sample similarity scores
     codeblue_avg: float  # mean of per‐sample CodeBLEU scores
     codebert_avg: float  # mean of per‐sample CodeBERT scores
+    rougeL_avg: float  # mean of per‐sample ROUGE-L scores
     # Add new metrics here as needed, e.g.:
     # mutation_score_avg: float
 
@@ -55,7 +57,9 @@ class MetricsEvaluator:
     f1_scores: list[float]
     codebleu_scores: list[float]
     codebert_scores: list[float]
+    rougeL_scores: list[float]
     _metric_funcs: dict[str, Callable[[], float]]
+    _rouge_scorer: rouge_scorer.RougeScorer
 
     # Extend with new metrics here
 
@@ -76,6 +80,7 @@ class MetricsEvaluator:
         self.f1_scores: list[float] = []
         self.codebleu_scores: list[float] = []
         self.codebert_scores: list[float] = []
+        self.rougeL_scores: list[float] = []
         # Initialize new metrics accumulators here
 
         # Register metric computation methods
@@ -87,8 +92,11 @@ class MetricsEvaluator:
             'similarity_score_avg': self._similarity_score_avg,
             'codeblue_avg': self._codeblue_avg,
             'codebert_avg': self._codebert_avg,
+            'rougeL_avg': self._rougeL_avg,  # Placeholder for ROUGE-L
             # Extend with new metrics aggregation functions here
         }
+
+        self._rouge_scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
 
     @staticmethod
     def normalize_assertion(assertion: str) -> str:
@@ -140,6 +148,7 @@ class MetricsEvaluator:
                 "similarity_scores": [],
                 "codeblue_score": 0,
                 "codebert_score": 0,
+                "rougeL": 0,
             }
 
         # Normalize assertions
@@ -174,6 +183,7 @@ class MetricsEvaluator:
         codebleu_score = calc_codebleu([joined_reference],
                                        [joined_generated], 'java')
         codebert_score: torch.Tensor = code_bert_score.score([joined_generated], [joined_reference], lang='java')
+        rougeL_score = self._rouge_scorer.score(joined_generated, joined_reference)['rougeL'].fmeasure
 
         return {
             "exact_matches": exact_matches,
@@ -187,6 +197,7 @@ class MetricsEvaluator:
             "similarity_scores": similarity_scores,
             "codeblue_score": codebleu_score['codebleu'],
             "codebert_score": codebert_score[2].item(),  # F1
+            "rougeL": rougeL_score,
         }
 
     def update(self, result: AssertionEvalResult) -> None:
@@ -201,6 +212,7 @@ class MetricsEvaluator:
         self.f1_scores.append(result.get("f1", 0))
         self.codebleu_scores.append(result.get("codeblue_score", 0))
         self.codebert_scores.append(result.get("codebert_score", 0))
+        self.rougeL_scores.append(result.get("rougeL", 0))
 
     def _precision(self) -> float:
         return self.exact_matches / self.generated_count if self.generated_count else 0
@@ -224,6 +236,9 @@ class MetricsEvaluator:
 
     def _codebert_avg(self) -> float:
         return sum(self.codebert_scores) / len(self.codebert_scores) if self.codebert_scores else 0
+
+    def _rougeL_avg(self) -> float:
+        return sum(self.rougeL_scores) / len(self.rougeL_scores) if self.rougeL_scores else 0
 
     # Add new metric functions here
 
