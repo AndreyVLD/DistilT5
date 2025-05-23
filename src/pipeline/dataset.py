@@ -191,38 +191,3 @@ class MapAssertGenDataset(AssertGenMixin, Dataset):
     def __getitem__(self, idx: int) -> Sample:
         raw = self._data[idx]
         return self._process_raw(raw)
-
-# def extract_method_via_ast(java_src: str, method_name: str) -> str:
-#     """
-#     Parse the Java source, find the MethodDeclaration whose .name == method_name,
-#     then return its full text (from its start line through matching braces).
-#     Handles potential JavaSyntaxError.
-#     """
-#     try:
-#         # Parse into AST
-#         tree = javalang.parse.parse(java_src)
-#         # Read lines once
-#         lines = java_src.splitlines(keepends=True)
-#
-#         for _, node in tree.filter(javalang.tree.MethodDeclaration):
-#             if node.name == method_name:
-#                 # node.position gives (line, col) of the signature
-#                 start_line = node.position.line - 1
-#                 # Now walk forward to extract until braces balance
-#                 brace_count = 0
-#                 snippet_lines = []
-#                 for i, line in enumerate(lines[start_line:], start=start_line):
-#                     snippet_lines.append(line)
-#                     brace_count += line.count("{") - line.count("}")
-#                     if brace_count == 0:
-#                         break
-#                 return "".join(snippet_lines)
-#
-#     except javalang.parser.JavaSyntaxError as e:
-#         # Return method name string to indicate parsing failed
-#         return java_src
-#     except Exception as e:
-#         # Catch other potential exceptions during parsing
-#         return java_src
-#
-#     return method_name

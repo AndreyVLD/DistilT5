@@ -19,7 +19,7 @@ class DistillationConfig:
     def __init__(self) -> None:
         # Models
         self.student_model_name = "Salesforce/codet5-small"
-        self.pretrained_model = False
+        self.pretrained_model = True
 
         # Dataset
         self.train_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_training.jsonl"
@@ -28,8 +28,8 @@ class DistillationConfig:
         self.max_trg_length = 512
 
         # Training
-        self.train_batch_size = 32
-        self.eval_batch_size = 64
+        self.train_batch_size = 16
+        self.eval_batch_size = 12
         self.learning_rate = 1e-4
         self.num_train_epochs = 10
         self.warmup_steps = 50
@@ -37,11 +37,11 @@ class DistillationConfig:
         self.temperature = 2.0  # Temperature for softening probability distributions
         self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
         self.eval_steps = 0  # Steps between evaluations (in a single epoch)
-        self.eval_epochs = 25  # Number of epochs between evaluations
+        self.eval_epochs = 1  # Number of epochs between evaluations
         self.num_workers = 8  # Number of workers for DataLoader
 
         # Output
-        self.output_dir = Path(__file__).resolve().parents[2] / "output_mini_test"
+        self.output_dir = Path(__file__).resolve().parents[2] / "output_distillation_v2"
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -172,8 +172,8 @@ class DistillationTrainer:
             print(f"Epoch {epoch + 1}/{self.config.num_train_epochs}, Loss: {avg_loss:.4f}")
 
             # Evaluate the model
-            if ((epoch % self.config.eval_epochs == 0 or epoch == self.config.num_train_epochs - 1)
-                    and self.config.eval_epochs > 0 and epoch > 0):
+            if (((epoch + 1) % self.config.eval_epochs == 0 or epoch == self.config.num_train_epochs - 1)
+                    and self.config.eval_epochs > 0):
                 print(f"  Evaluating epoch {epoch + 1}...")
                 val_loss, eval_results = self.evaluate(eval_loader)
 

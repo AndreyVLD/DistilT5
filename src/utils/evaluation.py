@@ -24,6 +24,7 @@ def calculate_similarity(reference: str, candidate: str) -> float:
     return SequenceMatcher(None, reference, candidate).ratio()
 
 
+# TODO Type this return value with the correct TypedDict
 def evaluate_assertions(generated_assertions: str | list[str], reference_assertions: str | list[str]) \
         -> dict[str, float | list[float]]:
     """Evaluate the quality of generated assertions against reference assertions"""
@@ -94,6 +95,8 @@ def evaluate_assertions(generated_assertions: str | list[str], reference_asserti
     }
 
 
+# TODO Type this return value with the correct TypedDict
+# TODO Modularize this function to avoid code duplication with the evaluation in the pipeline
 def evaluate_teacher(file_path: str) -> dict[str, float]:
     """
     Evaluate the teacher model assertions by comparing generated assertions with reference assertions.
