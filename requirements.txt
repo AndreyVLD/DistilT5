@@ -7,3 +7,5 @@ tqdm~=4.67.1
 orjson~=3.10.18
 lz4
 matplotlib~=3.10.3
+codebleu @ git+https://github.com/k4black/codebleu.git
+tree-sitter-java~=0.23.5

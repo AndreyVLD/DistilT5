@@ -1,17 +1,14 @@
-from typing import Optional
-
 import numpy as np
 import torch
 
 from pathlib import Path
-
 from torch import nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import get_linear_schedule_with_warmup, AutoTokenizer
-
-from utils.evaluation import evaluate_assertions
+from typing import Optional
+from utils.evaluation import MetricsEvaluator, ComputeAllResult
 from .model import StudentModel, DistillationLoss
 
 
@@ -114,7 +111,8 @@ class DistillationTrainer:
         metrics_file = self.config.output_dir / "metrics.csv"
         metrics_file.parent.mkdir(parents=True, exist_ok=True)
         with open(metrics_file, "w") as f:
-            f.write("epoch,global_step,train_loss,eval_loss,accuracy,similarity,f1,precision,recall\n")
+            f.write(
+                "epoch,global_step,train_loss,eval_loss,accuracy,similarity,f1,precision,recall,codeblue_avg,codebert_avg\n")
 
         for epoch in range(self.config.num_train_epochs):
             epoch_loss = 0.0
@@ -159,17 +157,19 @@ class DistillationTrainer:
 
                 # Evaluate the model
                 if self.config.eval_steps > 0 and global_step % self.config.eval_steps == 0 and global_step > 0:
+                    print(f"\nEvaluation at step {global_step}:")
                     val_loss, eval_results = self.evaluate(eval_loader)
 
-                    print(f"\nEvaluation at step {global_step}:")
-                    print(f"  Loss: {val_loss:.4f}")
-                    print(f"  Similarity: {eval_results['similarity_score_avg']:.4f}")
-                    print(f"  Accuracy: {eval_results['accuracy']:.4f}")
-                    print(f"  F1: {eval_results['f1']:.4f}")
+                    print(f"  Validation loss: {val_loss:.4f}")
+                    print(f"  Evaluation results:\n{eval_results}")
 
             # Log end of epoch
             avg_loss = epoch_loss / len(train_loader)
             print(f"Epoch {epoch + 1}/{self.config.num_train_epochs}, Loss: {avg_loss:.4f}")
+
+            # Save Model
+            path = self.config.output_dir / f"epoch_{epoch + 1}"
+            self.student_model.save_model(str(path))
 
             # Evaluate the model
             if (((epoch + 1) % self.config.eval_epochs == 0 or epoch == self.config.num_train_epochs - 1)
@@ -180,19 +180,13 @@ class DistillationTrainer:
                 with open(metrics_file, "a") as f:
                     f.write(f"{epoch + 1},{global_step},{avg_loss:.6f},{val_loss:.6f},"
                             f"{eval_results['accuracy']:.6f},{eval_results['similarity_score_avg']:.6f},"
-                            f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f}\n")
+                            f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f}"
+                            f"{eval_results['codeblue_avg']:.6f},{eval_results['codebert_avg']:.6f}\n")
 
                 print(f"  Validation loss: {val_loss:.4f}")
-                print(f"  Similarity score: {eval_results['similarity_score_avg']:.4f}")
-                print(f"  Accuracy: {eval_results['accuracy']:.4f}")
-                print(f"  F1 score: {eval_results['f1']:.4f}")
+                print(f"  Evaluation results:\n{eval_results}")
 
-            # Save Model
-            path = self.config.output_dir / f"epoch_{epoch + 1}"
-            self.student_model.save_model(str(path))
-
-    def evaluate(self, eval_loader: DataLoader, use_teacher_pred: bool = False) -> (
-            tuple)[float, dict[str, float | list[float]]]:
+    def evaluate(self, eval_loader: DataLoader, use_teacher_pred: bool = False) -> tuple[float, ComputeAllResult]:
         """
         Evaluate the model using the provided DataLoader.
         Args:
@@ -204,14 +198,7 @@ class DistillationTrainer:
         """
         self.student_model.eval()
         eval_loss = 0.0
-        all_metrics = {
-            "exact_matches": 0,
-            "generated_count": 0,
-            "reference_count": 0,
-            "similarity_scores": [],
-            "accuracy_scores": [],
-            "f1_scores": []
-        }
+        evaluator = MetricsEvaluator()
 
         progress_bar = tqdm(eval_loader, desc="Evaluating")
         with torch.no_grad():
@@ -258,15 +245,10 @@ class DistillationTrainer:
                         reference_text = batch["original_target"][idx]
 
                     # Evaluate
-                    metrics = evaluate_assertions(generated_text, reference_text)
+                    metrics = evaluator.evaluate_assertions(generated_text, reference_text)
 
                     # Update metrics
-                    all_metrics["exact_matches"] += metrics["exact_matches"]
-                    all_metrics["generated_count"] += metrics["generated_count"]
-                    all_metrics["reference_count"] += metrics["reference_count"]
-                    all_metrics["similarity_scores"].extend(metrics["similarity_scores"])
-                    all_metrics["accuracy_scores"].append(metrics["accuracy"])
-                    all_metrics["f1_scores"].append(metrics["f1"])
+                    evaluator.update(metrics)
 
                     # Display sample predictions occasionally
                     if np.random.random() < 0.01:  # Show ~1% of predictions
@@ -280,33 +262,7 @@ class DistillationTrainer:
         # Calculate overall metrics
         avg_loss = eval_loss / len(eval_loader)
 
-        # Handle empty metrics
-        if not all_metrics["similarity_scores"]:
-            return avg_loss, {"precision": 0, "recall": 0, "f1": 0, "accuracy": 0, "similarity_score_avg": 0}
-
-        # Calculate aggregate metrics
-        overall_precision = all_metrics["exact_matches"] / all_metrics["generated_count"] if all_metrics[
-            "generated_count"] else 0
-        overall_recall = all_metrics["exact_matches"] / all_metrics["reference_count"] if all_metrics[
-            "reference_count"] else 0
-        overall_f1 = 2 * overall_precision * overall_recall / (overall_precision + overall_recall) \
-            if (overall_precision + overall_recall) > 0 else 0
-
-        # Average per-sample metrics
-        avg_similarity = sum(all_metrics["similarity_scores"]) / len(all_metrics["similarity_scores"])
-        avg_accuracy = sum(all_metrics["accuracy_scores"]) / len(all_metrics["accuracy_scores"]) if all_metrics[
-            "accuracy_scores"] else 0
-
-        eval_results = {
-            "precision": overall_precision,
-            "recall": overall_recall,
-            "f1": overall_f1,
-            "accuracy": avg_accuracy,
-            "similarity_score_avg": avg_similarity,
-            "total_exact_matches": all_metrics["exact_matches"],
-            "total_generated": all_metrics["generated_count"],
-            "total_reference": all_metrics["reference_count"]
-        }
+        eval_results = evaluator.compute_all()
 
         self.student_model.train()  # Reset to training mode after evaluation
 
