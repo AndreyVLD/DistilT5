@@ -20,7 +20,7 @@ class DistillationConfig:
 
         # Dataset
         self.train_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_training.jsonl"
-        self.eval_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_validation_base.jsonl"
+        self.eval_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_validation.jsonl"
         self.max_src_length = 1024
         self.max_trg_length = 512
 
@@ -180,9 +180,9 @@ class DistillationTrainer:
                 with open(metrics_file, "a") as f:
                     f.write(f"{epoch + 1},{global_step},{avg_loss:.6f},{val_loss:.6f},"
                             f"{eval_results['accuracy']:.6f},{eval_results['similarity_score_avg']:.6f},"
-                            f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f}"
-                            f"{eval_results['codeblue_avg']:.6f},{eval_results['codebert_avg']:.6f}"
-                            f"{eval_results['rougeL_avg']}\n")
+                            f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f},"
+                            f"{eval_results['codeblue_avg']:.6f},{eval_results['codebert_avg']:.6f},"
+                            f"{eval_results['rougeL_avg']:.6f}\n")
 
                 print(f"  Validation loss: {val_loss:.4f}")
                 print(f"  Evaluation results:\n{eval_results}")
@@ -204,7 +204,6 @@ class DistillationTrainer:
         progress_bar = tqdm(eval_loader, desc="Evaluating")
         with torch.no_grad():
             for batch in progress_bar:
-
                 # Move batch to device
                 input_ids = batch["input_ids"].to(self.config.device)
                 attention_mask = batch["attention_mask"].to(self.config.device)
