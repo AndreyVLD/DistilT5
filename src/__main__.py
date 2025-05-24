@@ -27,7 +27,7 @@ def evaluate() -> None:
         pin_memory=True,
     )
 
-    avg_loss, eval_results = trainer.evaluate(validation_loader, True)
+    avg_loss, eval_results = trainer.evaluate(validation_loader, False)
 
     print(f"Average evaluation: {avg_loss}")
     print(f"Evaluation Results: {eval_results}")
@@ -74,8 +74,8 @@ def train() -> None:
 
 def main() -> None:
     # Uncomment the function you want to run
-    train()
-    # evaluate()
+    # train()
+    evaluate()
 
 
 if __name__ == '__main__':

@@ -20,7 +20,7 @@ class DistillationConfig:
 
         # Dataset
         self.train_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_training.jsonl"
-        self.eval_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_validation.jsonl"
+        self.eval_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_validation_base.jsonl"
         self.max_src_length = 1024
         self.max_trg_length = 512
 
@@ -28,7 +28,7 @@ class DistillationConfig:
         self.train_batch_size = 16
         self.eval_batch_size = 12
         self.learning_rate = 1e-4
-        self.num_train_epochs = 10
+        self.num_train_epochs = 15
         self.warmup_steps = 50
         self.weight_decay = 0.01
         self.temperature = 2.0  # Temperature for softening probability distributions
@@ -112,7 +112,7 @@ class DistillationTrainer:
         metrics_file.parent.mkdir(parents=True, exist_ok=True)
         with open(metrics_file, "w") as f:
             f.write(
-                "epoch,global_step,train_loss,eval_loss,accuracy,similarity,f1,precision,recall,codeblue_avg,codebert_avg\n")
+                "epoch,global_step,train_loss,eval_loss,accuracy,similarity,f1,precision,recall,codeblue_avg,codebert_avg,rouge_l\n")
 
         for epoch in range(self.config.num_train_epochs):
             epoch_loss = 0.0
@@ -181,7 +181,8 @@ class DistillationTrainer:
                     f.write(f"{epoch + 1},{global_step},{avg_loss:.6f},{val_loss:.6f},"
                             f"{eval_results['accuracy']:.6f},{eval_results['similarity_score_avg']:.6f},"
                             f"{eval_results['f1']:.6f},{eval_results['precision']:.6f},{eval_results['recall']:.6f}"
-                            f"{eval_results['codeblue_avg']:.6f},{eval_results['codebert_avg']:.6f}\n")
+                            f"{eval_results['codeblue_avg']:.6f},{eval_results['codebert_avg']:.6f}"
+                            f"{eval_results['rougeL_avg']}\n")
 
                 print(f"  Validation loss: {val_loss:.4f}")
                 print(f"  Evaluation results:\n{eval_results}")

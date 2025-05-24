@@ -28,7 +28,7 @@ class AssertionEvalResult(TypedDict):
     similarity_scores: list[float]  # list of best similarity per generated assertion
     codeblue_score: float  # CodeBLEU score
     codebert_score: float  # CodeBERT score
-    rougeL: float  # ROUGE-L score
+    rougeL: float  # ROUGE-L F1 score
     # Add new metrics here as needed, e.g.:
 
 
