@@ -29,7 +29,7 @@ class AssertionEvalResult(TypedDict):
     codeblue_score: float  # CodeBLEU score
     codebert_score: float  # CodeBERT score
     rougeL: float  # ROUGE-L F1 score
-    # Add new metrics here as needed, e.g.:
+    # Add new metrics here as needed
 
 
 class ComputeAllResult(TypedDict):
@@ -44,8 +44,7 @@ class ComputeAllResult(TypedDict):
     codeblue_avg: float  # mean of per‐sample CodeBLEU scores
     codebert_avg: float  # mean of per‐sample CodeBERT scores
     rougeL_avg: float  # mean of per‐sample ROUGE-L scores
-    # Add new metrics here as needed, e.g.:
-    # mutation_score_avg: float
+    # Add new metrics here as needed
 
 
 class MetricsEvaluator:
@@ -92,7 +91,7 @@ class MetricsEvaluator:
             'similarity_score_avg': self._similarity_score_avg,
             'codeblue_avg': self._codeblue_avg,
             'codebert_avg': self._codebert_avg,
-            'rougeL_avg': self._rougeL_avg,  # Placeholder for ROUGE-L
+            'rougeL_avg': self._rougeL_avg,
             # Extend with new metrics aggregation functions here
         }
 

@@ -65,7 +65,6 @@ class DistillationLoss(nn.Module):
         return distillation_loss
 
 
-# TODO investigate different configurations for the model T5
 # TODO investigate other pretrained models
 class StudentModel(nn.Module):
     model: T5ForConditionalGeneration
