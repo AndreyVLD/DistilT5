@@ -177,3 +177,4 @@ data/
 distillation_output/
 output_distillation_v2/
 small_distill/
+output_teacher/

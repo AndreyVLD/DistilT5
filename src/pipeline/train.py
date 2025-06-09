@@ -1,10 +1,13 @@
+import random
+import time
+
 import numpy as np
 import torch
 
 from pathlib import Path
 from torch import nn
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import get_linear_schedule_with_warmup, AutoTokenizer
 from typing import Optional
@@ -29,7 +32,8 @@ class DistillationConfig:
         self.eval_batch_size = 12
         self.learning_rate = 1e-4
         self.num_train_epochs = 15
-        self.warmup_steps = 50
+        self.warmup_steps_ratio = 0.1  # Percentage of total steps for warmup
+        self.warmup_steps = 0
         self.weight_decay = 0.01
         self.temperature = 2.0  # Temperature for softening probability distributions
         self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
@@ -78,7 +82,7 @@ class DistillationTrainer:
         self.student_model.train()
 
         total_steps = len(train_loader) * self.config.num_train_epochs
-        self.config.warmup_steps = int(total_steps * 0.1)  # 10% of total steps for warmup
+        self.config.warmup_steps = int(total_steps * self.config.warmup_steps_ratio)  # 10% of total steps for warmup
         global_step = 0
 
         # Log some info
@@ -267,3 +271,81 @@ class DistillationTrainer:
         self.student_model.train()  # Reset to training mode after evaluation
 
         return avg_loss, eval_results
+
+    def evaluate_generation_speed(
+            self,
+            dataset: Dataset,
+            output_file: Optional[Path] = None,
+            num_samples: int = 100,
+            max_length: Optional[int] = None,
+            num_beams: int = 4,
+    ) -> dict:
+        """
+        Measure generation latency on a random subset of eval data.
+
+        Args:
+            dataset (Dataset): Evaluation dataset.
+            output_file (Optional[Path]): If provided, will save generated samples to this file.
+            num_samples (int): Number of examples to sample for timing.
+            max_length (int, optional): Max generation length (defaults to self.config.max_trg_length).
+            num_beams (int): Number of beams for generation.
+
+        Returns:
+            dict: {
+                "times": List[float],    # per-sample generation times (seconds)
+                "mean": float,           # mean latency
+                "std": float,            # sample standard deviation
+                "ci95": float            # 95% CI margin (± around the mean)
+            }
+        """
+        # Put model in eval mode and disable gradients
+        self.student_model.eval()
+        device = self.config.device
+        max_len = max_length or self.config.max_trg_length
+
+        # Sample indices without replacement
+        n_total = len(dataset)
+        k = min(num_samples, n_total)
+        indices: list[int] = random.sample(range(n_total), k)
+
+        times = []
+        progress_bar = tqdm(indices, desc="Evaluating")
+        with torch.no_grad():
+            for idx in progress_bar:
+                item = dataset[idx]
+                # assume item dict has these keys as in your train/eval loops
+                input_ids = item["input_ids"].unsqueeze(0).to(device)
+                attention_mask = item["attention_mask"].unsqueeze(0).to(device)
+
+                t0 = time.perf_counter()
+                generated_ids = self.student_model.model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_length=max_len,
+                    num_beams=num_beams,
+                    early_stopping=True,
+                )
+                t1 = time.perf_counter()
+                times.append(t1 - t0)
+
+                generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+
+                if output_file:
+                    with open(output_file, "a", encoding='utf-8') as f:
+                        f.write(f"Sample {idx}:\nInput text:\n{item['original_input']}\nOriginal assertions:\n"
+                                f"{item['original_target']}\nGenerated assertion:\n{generated_text}\n\n")
+
+        times_arr = np.array(times)
+        mean = float(times_arr.mean())
+        std = float(times_arr.std(ddof=1))
+        ci95 = 1.96 * std / np.sqrt(len(times))
+
+        # Restore train mode
+        self.student_model.train()
+
+        return {
+            "times": times,
+            "mean": mean,
+            "std": std,
+            "ci95": ci95,
+        }

@@ -31,9 +31,11 @@ def set_seed(seed: int = 42):
     # 6. (Optional) Ensure hash-based operations are reproducible across runs
     os.environ["PYTHONHASHSEED"] = str(seed)
 
+    print(f"Random seed set to {seed}. This ensures reproducibility across runs.")
+
 
 def evaluate() -> None:
-    model_path = Path(__file__).resolve().parents[1] / "small_distill" / "epoch_62"
+    model_path = Path(__file__).resolve().parents[1] / "distillation_output" / "epoch_5"
     config = DistillationConfig()
     student_model = StudentModel.load_model(str(model_path), ModelType.CODET5PLUS).to(config.device)
     trainer = DistillationTrainer(config, student_model)
@@ -98,12 +100,37 @@ def train() -> None:
     trainer.train(train_loader, validation_loader)
 
 
+def evaluate_with_time() -> None:
+    model_path = Path(__file__).resolve().parents[1] / "output_distillation_v2" / "epoch_15"
+    config = DistillationConfig()
+    config.device = torch.device("cpu")
+
+    print(f"Device for timing: {config.device}")
+
+    student_model = StudentModel.load_model(str(model_path), ModelType.CODET5PLUS).to(config.device)
+    trainer = DistillationTrainer(config, student_model)
+
+    validation_dataset = MapAssertGenDataset(
+        tokenizer=trainer.tokenizer,
+        file_path=config.eval_dataset_path,
+        max_src_length=config.max_src_length,
+        max_trg_length=config.max_trg_length
+    )
+
+    speed_stats = trainer.evaluate_generation_speed(validation_dataset, num_samples=1000)
+    # output_file=model_path / "generated_assertions.txt")
+
+    print(f"Mean = {speed_stats['mean']:.4f}s, SD = {speed_stats['std']:.4f}s, 95% CI = {speed_stats['mean']:.4f} "
+          f"± {speed_stats['ci95']:.4f}s")
+
+
 def main() -> None:
     # Set random seed for reproducibility
     set_seed(42)
     # Uncomment the function you want to run
     # train()
-    evaluate()
+    # evaluate()
+    evaluate_with_time()
 
 
 if __name__ == '__main__':
