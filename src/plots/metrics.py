@@ -2,7 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
-def main() -> None:
+def retained_metrics() -> None:
     student_metrics = {
         'precision': 0.3062518006338231,
         'recall': 0.33104951728433507,
@@ -55,6 +55,10 @@ def main() -> None:
 
     plt.tight_layout()
     plt.show()
+
+
+def main() -> None:
+    retained_metrics()
 
 
 if __name__ == '__main__':

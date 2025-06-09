@@ -158,7 +158,8 @@ class StudentModel(nn.Module):
 
         # Load saved weights
         try:
-            state_dict = torch.load(f"{path}/model.pt")
+            map_location = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            state_dict = torch.load(f"{path}/model.pt", map_location=map_location)
             config = T5Config.from_pretrained(path)
             student_model.model = T5ForConditionalGeneration(config=config)
             student_model.model.load_state_dict(state_dict)
