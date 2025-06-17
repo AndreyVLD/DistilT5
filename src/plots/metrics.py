@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 
 def retained_metrics() -> None:
+    plt.rcParams['font.size'] = 16
     student_metrics = {
         'precision': 0.3062518006338231,
         'recall': 0.33104951728433507,
@@ -51,7 +52,7 @@ def retained_metrics() -> None:
     for bar in bars:
         height = bar.get_height()
         plt.text(bar.get_x() + bar.get_width() / 2, height + 1, f'{height:.1f}%',
-                 ha='center', va='bottom', fontsize=8)
+                 ha='center', va='bottom', fontsize=12)
 
     plt.tight_layout()
     plt.show()

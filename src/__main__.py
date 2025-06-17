@@ -37,7 +37,7 @@ def set_seed(seed: int = 42):
 def evaluate() -> None:
     model_path = Path(__file__).resolve().parents[1] / "distillation_output" / "epoch_5"
     config = DistillationConfig()
-    student_model = StudentModel.load_model(str(model_path), ModelType.CODET5PLUS).to(config.device)
+    student_model = StudentModel.load_model(str(model_path), ModelType.CODET5).to(config.device)
     trainer = DistillationTrainer(config, student_model)
 
     validation_dataset = MapAssertGenDataset(
@@ -107,7 +107,7 @@ def evaluate_with_time() -> None:
 
     print(f"Device for timing: {config.device}")
 
-    student_model = StudentModel.load_model(str(model_path), ModelType.CODET5PLUS).to(config.device)
+    student_model = StudentModel.load_model(str(model_path), ModelType.CODET5).to(config.device)
     trainer = DistillationTrainer(config, student_model)
 
     validation_dataset = MapAssertGenDataset(
@@ -117,8 +117,8 @@ def evaluate_with_time() -> None:
         max_trg_length=config.max_trg_length
     )
 
-    speed_stats = trainer.evaluate_generation_speed(validation_dataset, num_samples=1000)
-    # output_file=model_path / "generated_assertions.txt")
+    speed_stats = trainer.evaluate_generation_speed(validation_dataset, num_samples=1000,
+                                                    output_file=model_path / "generated_assertions.txt")
 
     print(f"Mean = {speed_stats['mean']:.4f}s, SD = {speed_stats['std']:.4f}s, 95% CI = {speed_stats['mean']:.4f} "
           f"± {speed_stats['ci95']:.4f}s")
