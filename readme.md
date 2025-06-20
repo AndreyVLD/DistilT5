@@ -102,3 +102,7 @@ def main() -> None:
 ### Configuring Distillation
 
 The model and training settings can be configured by modifying the `DistillationConfig` class in `pipeline/train.py`.
+
+### License
+
+This project is released under the MIT License, see the `LICENSE` file for details.
