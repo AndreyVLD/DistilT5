@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/978328491.svg)](https://doi.org/10.5281/zenodo.15707159)
+
 # DistilT5
 
 A model distillation pipeline for automatically generating assertions from test methods. This project is part of a
