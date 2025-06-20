@@ -126,7 +126,7 @@ the project.
     date = {2025},
     publisher = {Zenodo},
     doi = {10.5281/zenodo.15707159},
-    url = {https://github.com/AndreyVLD/DistilT5},
+    url = {https://doi.org/10.5281/zenodo.15707159},
 }
 ```
 
