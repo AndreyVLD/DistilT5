@@ -10,7 +10,9 @@ from pipeline.train import DistillationConfig, DistillationTrainer
 
 
 def set_seed(seed: int = 42):
-    # 1. Python built-in RNG (if you use `random.random()`, `random.randint()`, etc.)
+    """Set the random seed for reproducibility across different libraries."""
+
+    # 1. Python built-in RNG
     random.seed(seed)
 
     # 2. NumPy RNG
@@ -35,6 +37,7 @@ def set_seed(seed: int = 42):
 
 
 def evaluate() -> None:
+    """ Evaluate the student model on the validation dataset."""
     model_path = Path(__file__).resolve().parents[1] / "distillation_output" / "epoch_5"
     config = DistillationConfig()
     student_model = StudentModel.load_model(str(model_path), ModelType.CODET5).to(config.device)
@@ -62,6 +65,9 @@ def evaluate() -> None:
 
 
 def train() -> None:
+    """
+    Train the student model using the distillation process.
+    """
     config = DistillationConfig()
     trainer = DistillationTrainer(config, None)
 
@@ -101,7 +107,10 @@ def train() -> None:
 
 
 def evaluate_with_time() -> None:
-    model_path = Path(__file__).resolve().parents[1] / "output_distillation_v2" / "epoch_15"
+    """
+    Evaluate the generation speed of the student model on the validation dataset.
+    """
+    model_path = Path(__file__).resolve().parents[1] / "distillation_output" / "epoch_15"
     config = DistillationConfig()
     config.device = torch.device("cpu")
 

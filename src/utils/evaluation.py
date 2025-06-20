@@ -29,7 +29,6 @@ class AssertionEvalResult(TypedDict):
     codeblue_score: float  # CodeBLEU score
     codebert_score: float  # CodeBERT score
     rougeL: float  # ROUGE-L F1 score
-    # Add new metrics here as needed
 
 
 class ComputeAllResult(TypedDict):
@@ -44,10 +43,14 @@ class ComputeAllResult(TypedDict):
     codeblue_avg: float  # mean of per‐sample CodeBLEU scores
     codebert_avg: float  # mean of per‐sample CodeBERT scores
     rougeL_avg: float  # mean of per‐sample ROUGE-L scores
-    # Add new metrics here as needed
 
 
 class MetricsEvaluator:
+    """
+    Class to evaluate the quality of generated assertions against reference assertions.
+    This class accumulates metrics over multiple evaluations and provides methods to compute overall statistics.
+    """
+
     exact_matches: int
     generated_count: int
     reference_count: int
@@ -59,8 +62,6 @@ class MetricsEvaluator:
     rougeL_scores: list[float]
     _metric_funcs: dict[str, Callable[[], float]]
     _rouge_scorer: rouge_scorer.RougeScorer
-
-    # Extend with new metrics here
 
     def __init__(self):
         self.reset()
@@ -80,7 +81,6 @@ class MetricsEvaluator:
         self.codebleu_scores: list[float] = []
         self.codebert_scores: list[float] = []
         self.rougeL_scores: list[float] = []
-        # Initialize new metrics accumulators here
 
         # Register metric computation methods
         self._metric_funcs = {
@@ -92,14 +92,20 @@ class MetricsEvaluator:
             'codeblue_avg': self._codeblue_avg,
             'codebert_avg': self._codebert_avg,
             'rougeL_avg': self._rougeL_avg,
-            # Extend with new metrics aggregation functions here
         }
 
         self._rouge_scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
 
     @staticmethod
     def normalize_assertion(assertion: str) -> str:
-        """Normalize assertion text for more reliable comparison"""
+        """
+        Normalize an assertion string by removing whitespace, variable names, and normalizing method names.
+        Args:
+            assertion (str): The assertion string to normalize.
+        Returns:
+            str: The normalized assertion string.
+        """
+
         # Remove whitespace
         assertion = re.sub(r'\s+', ' ', assertion).strip()
 
@@ -113,12 +119,27 @@ class MetricsEvaluator:
 
     @staticmethod
     def calculate_similarity(reference: str, candidate: str) -> float:
-        """Calculate string similarity using SequenceMatcher"""
+        """
+        Calculate the similarity ratio between two strings using SequenceMatcher.
+        Args:
+            reference (str): The reference string.
+            candidate (str): The candidate string to compare against the reference.
+        Returns:
+            float: Similarity ratio between 0 and 1.
+        """
         return SequenceMatcher(None, reference, candidate).ratio()
 
     def evaluate_assertions(self, generated_assertions: str | list[str],
                             reference_assertions: str | list[str]) -> AssertionEvalResult:
-        """Evaluate the quality of generated assertions against reference assertions"""
+        """
+        Evaluate the generated assertions against the reference assertions.
+        Args:
+            generated_assertions (str | list[str]): The generated assertions, either as a string or a list.
+            reference_assertions (str | list[str]): The reference assertions, either as a string or a list.
+        Returns:
+            AssertionEvalResult: A dictionary containing evaluation metrics.
+        """
+
         # Parse individual assertions if provided as multiline string
         if isinstance(generated_assertions, str):
             # Split by semicolons or newlines
@@ -201,7 +222,9 @@ class MetricsEvaluator:
 
     def update(self, result: AssertionEvalResult) -> None:
         """
-        Update internal state from evaluate_assertions() output.
+        Update the metrics evaluator with a new result from evaluate_assertions().
+        Args:
+            result (AssertionEvalResult): The result dictionary from evaluate_assertions().
         """
         self.exact_matches += result.get("exact_matches", 0)
         self.generated_count += result.get("generated_count", 0)
@@ -214,29 +237,37 @@ class MetricsEvaluator:
         self.rougeL_scores.append(result.get("rougeL", 0))
 
     def _precision(self) -> float:
+        """Calculate precision as exact matches over generated count."""
         return self.exact_matches / self.generated_count if self.generated_count else 0
 
     def _recall(self) -> float:
+        """Calculate recall as exact matches over reference count."""
         return self.exact_matches / self.reference_count if self.reference_count else 0
 
     def _f1(self) -> float:
+        """Calculate F1 score as harmonic mean of precision and recall."""
         p = self._precision()
         r = self._recall()
         return (2 * p * r / (p + r)) if (p + r) else 0
 
     def _accuracy(self) -> float:
+        """Calculate accuracy as exact matches over max of generated and reference counts."""
         return sum(self.accuracy_scores) / len(self.accuracy_scores) if self.accuracy_scores else 0
 
     def _similarity_score_avg(self) -> float:
+        """Calculate average similarity score across all generated assertions."""
         return sum(self.similarity_scores) / len(self.similarity_scores) if self.similarity_scores else 0
 
     def _codeblue_avg(self) -> float:
+        """Calculate average CodeBLEU score across all generated assertions."""
         return sum(self.codebleu_scores) / len(self.codebleu_scores) if self.codebleu_scores else 0
 
     def _codebert_avg(self) -> float:
+        """Calculate average CodeBERT score across all generated assertions."""
         return sum(self.codebert_scores) / len(self.codebert_scores) if self.codebert_scores else 0
 
     def _rougeL_avg(self) -> float:
+        """Calculate average ROUGE-L score across all generated assertions."""
         return sum(self.rougeL_scores) / len(self.rougeL_scores) if self.rougeL_scores else 0
 
     # Add new metric functions here
@@ -244,6 +275,8 @@ class MetricsEvaluator:
     def compute_all(self) -> ComputeAllResult:
         """
         Compute all registered metrics in one call.
+        Returns:
+            ComputeAllResult: A dictionary containing all computed metrics.
         """
         return cast(ComputeAllResult, {name: func() for name, func in self._metric_funcs.items()})
 

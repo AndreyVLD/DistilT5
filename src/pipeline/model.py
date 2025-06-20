@@ -11,11 +11,22 @@ from transformers.modeling_outputs import Seq2SeqLMOutput
 
 
 class ModelType(Enum):
+    """Enum representing different model types for student models."""
     CODET5PLUS = "codet5plus"
     CODET5 = "codet5"
 
 
 class DistillationLoss(nn.Module):
+    """
+    Distillation loss function that computes the loss between student and teacher model logits.
+
+    It combines the Kullback-Leibler divergence (KL divergence) for the logits and the cross-entropy loss for the
+    true labels.
+
+    It uses a temperature scaling factor and an alpha parameter to balance the contribution of the distillation loss
+    and the cross-entropy loss.
+    """
+
     def __init__(self, temperature: float = 2.0, alpha: float = 0.7) -> None:
         super().__init__()
         self.temperature = temperature
@@ -66,11 +77,32 @@ class DistillationLoss(nn.Module):
 
 
 class StudentModel(nn.Module):
+    """
+    Student model class that wraps a T5 model for code generation tasks.
+    """
     model: T5ForConditionalGeneration
 
     def __init__(self, tokenizer: RobertaTokenizer, name: Optional[str], use_pretrained: bool = False) -> None:
+        """
+        Initialize the StudentModel with a tokenizer and optional model name.
+
+        If `name` is None, a new model is initialized with the specified configuration.
+
+        If `use_pretrained` is True and `name` is provided, the model will load the pre-trained weights from that name.
+
+        If `use_pretrained` is False and `name` is provided, a new model is initialized by inheriting weights from the
+        specified name. Mismatched sizes will be ignored.
+
+        Args:
+            tokenizer (T5Tokenizer): Tokenizer for the model.
+            name (Optional[str]): Name of the pre-trained model to load. If None, a new model is initialized.
+            use_pretrained (bool): Whether to use a pre-trained model or initialize a new one.
+        """
+
         super().__init__()
         self.tokenizer = tokenizer
+
+        # Initialize T5 configuration with custom parameters
         self.config = T5Config(
             vocab_size=tokenizer.vocab_size,
             d_model=256,
@@ -96,6 +128,17 @@ class StudentModel(nn.Module):
             self.model = T5ForConditionalGeneration.from_pretrained(name)
 
     def forward(self, input_ids: Tensor, attention_mask: Tensor, labels: Optional[Tensor]) -> Seq2SeqLMOutput:
+        """
+        Forward pass of the student model.
+        Args:
+            input_ids (Tensor): Input token IDs for the model.
+            attention_mask (Tensor): Attention mask to avoid attending to padding tokens.
+            labels (Optional[Tensor]): Labels for the task, used for computing loss during training.
+
+        Returns:
+            Seq2SeqLMOutput: Output of the model containing logits and loss if labels are provided.
+
+        """
         outputs: Seq2SeqLMOutput = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
         return outputs
 

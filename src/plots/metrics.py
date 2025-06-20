@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 
 
 def retained_metrics() -> None:
+    """Plot the retention of student metrics compared to teacher metrics."""
+
     plt.rcParams['font.size'] = 16
     student_metrics = {
         'precision': 0.3062518006338231,

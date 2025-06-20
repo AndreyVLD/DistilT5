@@ -8,6 +8,7 @@ from utils.decompression import decompress_logits
 
 
 class Sample(TypedDict):
+    """Represents a single sample in the assert generation dataset."""
     original_input: str
     original_target: str
     predicted_assertions: str
@@ -18,6 +19,7 @@ class Sample(TypedDict):
 
 
 class RawEntry(TypedDict):
+    """Represents a raw entry in the assert generation dataset jsonl file."""
     focal_file: str
     test_method_masked: str
     original_target: list[str] | str
@@ -26,6 +28,14 @@ class RawEntry(TypedDict):
 
 
 def validate_raw(raw: dict[str, Any]) -> bool:
+    """
+    Validate a raw entry to ensure it contains all required fields.
+    Args:
+        raw: A dictionary representing a raw entry from the dataset. A line from the JSONL file.
+
+    Returns:
+        bool: True if the raw entry is valid, False otherwise.
+    """
     if not isinstance(raw, dict):
         print(f"Invalid raw entry: {raw}")
         return False
@@ -40,8 +50,23 @@ def validate_raw(raw: dict[str, Any]) -> bool:
 
 
 class AssertGenMixin:
+    """
+    Mixin class for assert generation datasets.
+    This class provides common functionality for processing raw entries and iterating over the dataset.
+    """
+
     def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
                  max_trg_length: int = 64) -> None:
+
+        """
+        Initialize the AssertGenMixin with tokenizer and dataset parameters.
+        Args:
+            tokenizer (RobertaTokenizer): Tokenizer to use for encoding the inputs and targets.
+            file_path (str): Path to the JSONL file containing the dataset.
+            max_src_length (int): Maximum length of the source input (test method + focal file).
+            max_trg_length (int): Maximum length of the target output (assertions).
+        """
+
         self.file_path = file_path
         self.tokenizer = tokenizer
         self.max_src_length = max_src_length
@@ -49,6 +74,15 @@ class AssertGenMixin:
         self.len = None
 
     def _process_raw(self, raw: RawEntry) -> Optional[Sample]:
+        """
+        Process a raw entry from the dataset and convert it into a Sample.
+        Args:
+            raw: A dictionary representing a raw entry from the dataset. A line from the JSONL file.
+
+        Returns:
+            Sample: A dictionary containing the processed input and target tensors, along with metadata.
+            Returns None if the raw entry is invalid.
+        """
 
         # Extract fields from the raw entry
         focal_file = raw["focal_file"]
@@ -142,6 +176,11 @@ class AssertGenMixin:
         return sample
 
     def _iter_raws(self) -> Iterator[RawEntry]:
+        """
+        Iterate over the JSONL file lazily, yielding raw entries.
+        Returns:
+            Iterator[RawEntry]: An iterator that yields raw entries from the dataset.
+        """
         with open(self.file_path, "r") as f:
             for line in f:
                 raw_json = orjson.loads(line)
@@ -158,16 +197,34 @@ class IterableAssertGenDataset(AssertGenMixin, IterableDataset):
 
     def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
                  max_trg_length: int = 64) -> None:
+        """
+        Initialize the IterableAssertGenDataset with tokenizer and dataset parameters.
+        Args:
+            tokenizer (RobertaTokenizer): Tokenizer to use for encoding the inputs and targets.
+            file_path (str): Path to the JSONL file containing the dataset.
+            max_src_length (int): Maximum length of the source input (test method + focal file).
+            max_trg_length (int): Maximum length of the target output (assertions).
+        """
         super().__init__(tokenizer, file_path, max_src_length, max_trg_length)
         self._len = None
 
     def __len__(self) -> int:
+        """
+        Get the length of the dataset by counting the number of lines in the JSONL file.
+        Returns:
+            int: The number of samples in the dataset.
+        """
         if self.len is None:
             with open(self.file_path, 'r') as f:
                 self.len = sum(1 for _ in f)
         return self.len
 
     def __iter__(self) -> Iterator[Sample]:
+        """
+        Iterate over the dataset, processing each raw entry into a Sample.
+        Returns:
+            Iterator[Sample]: An iterator that yields processed samples from the dataset.
+        """
         for raw in self._iter_raws():
             yield self._process_raw(raw)
 
@@ -181,13 +238,35 @@ class MapAssertGenDataset(AssertGenMixin, Dataset):
 
     def __init__(self, tokenizer: RobertaTokenizer, file_path: str, max_src_length: int = 64,
                  max_trg_length: int = 64) -> None:
+        """
+        Initialize the MapAssertGenDataset with tokenizer and dataset parameters.
+        Args:
+            tokenizer (RobertaTokenizer): Tokenizer to use for encoding the inputs and targets.
+            file_path (str): Path to the JSONL file containing the dataset.
+            max_src_length (int): Maximum length of the source input (test method + focal file).
+            max_trg_length (int): Maximum length of the target output (assertions).
+        """
+
         super().__init__(tokenizer, file_path, max_src_length, max_trg_length)
-        # eagerly load everything into memory
+        # Eagerly load everything into memory
         self._data = list(self._iter_raws())
 
     def __len__(self) -> int:
+        """
+        Get the length of the dataset.
+        Returns:
+            Returns the number of samples in the dataset.
+        """
         return len(self._data)
 
     def __getitem__(self, idx: int) -> Sample:
+        """
+        Get a single item from the dataset by index.
+        Args:
+            idx (int): Index of the item to retrieve.
+
+        Returns:
+            Sample: A dictionary containing the processed input and target tensors, along with metadata.
+        """
         raw = self._data[idx]
         return self._process_raw(raw)

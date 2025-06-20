@@ -16,25 +16,35 @@ from .model import StudentModel, DistillationLoss
 
 
 class DistillationConfig:
+    """
+    Configuration class for the distillation training process.
+    Contains all hyperparameters and paths needed for training the student model.
+    """
+
     def __init__(self) -> None:
         # Models
         self.student_model_name = "Salesforce/codet5-small"
         self.pretrained_model = True
 
         # Dataset
+
+        # Path to training dataset
         self.train_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_training.jsonl"
+
+        # Path to evaluation dataset
         self.eval_dataset_path = Path(__file__).resolve().parents[2] / "data/distillation_data_validation.jsonl"
-        self.max_src_length = 1024
-        self.max_trg_length = 512
+
+        self.max_src_length = 1024  # Maximum source sequence length
+        self.max_trg_length = 512  # Maximum target sequence length
 
         # Training
-        self.train_batch_size = 16
-        self.eval_batch_size = 12
-        self.learning_rate = 1e-4
-        self.num_train_epochs = 15
+        self.train_batch_size = 16  # Batch size for training
+        self.eval_batch_size = 12  # Batch size for evaluation
+        self.learning_rate = 1e-4  # Learning rate for the optimizer (maximum learning rate in the scheduler)
+        self.num_train_epochs = 15  # Number of epochs to train the model
         self.warmup_steps_ratio = 0.1  # Percentage of total steps for warmup
-        self.warmup_steps = 0
-        self.weight_decay = 0.01
+        self.warmup_steps = 0  # Warmup steps will be calculated based on total steps
+        self.weight_decay = 0.01  # Weight decay for the optimizer
         self.temperature = 2.0  # Temperature for softening probability distributions
         self.alpha = 0.7  # Weight for distillation loss vs  task-specific loss
         self.eval_steps = 0  # Steps between evaluations (in a single epoch)
@@ -42,7 +52,11 @@ class DistillationConfig:
         self.num_workers = 8  # Number of workers for DataLoader
 
         # Output
-        self.output_dir = Path(__file__).resolve().parents[2] / "output_distillation_v2"
+
+        # Directory to save model checkpoints and metrics
+        self.output_dir = Path(__file__).resolve().parents[2] / "distillation_output"
+
+        # Device to use for training (GPU if available, otherwise CPU)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -103,8 +117,10 @@ class DistillationTrainer:
             },
         ]
 
+        # Use AdamW optimizer
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.config.learning_rate)
 
+        # Initialize learning rate scheduler
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=self.config.warmup_steps,
@@ -313,11 +329,14 @@ class DistillationTrainer:
         with torch.no_grad():
             for idx in progress_bar:
                 item = dataset[idx]
-                # assume item dict has these keys as in your train/eval loops
+
+                # Move inputs to device
                 input_ids = item["input_ids"].unsqueeze(0).to(device)
                 attention_mask = item["attention_mask"].unsqueeze(0).to(device)
 
                 t0 = time.perf_counter()
+
+                # Generate assertions
                 generated_ids = self.student_model.model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
@@ -330,11 +349,13 @@ class DistillationTrainer:
 
                 generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
 
+                # Save generated text if output file is specified
                 if output_file:
                     with open(output_file, "a", encoding='utf-8') as f:
                         f.write(f"Sample {idx}:\nInput text:\n{item['original_input']}\nOriginal assertions:\n"
                                 f"{item['original_target']}\nGenerated assertion:\n{generated_text}\n\n")
 
+        # Time statistics
         times_arr = np.array(times)
         mean = float(times_arr.mean())
         std = float(times_arr.std(ddof=1))
