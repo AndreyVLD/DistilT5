@@ -108,3 +108,25 @@ The model and training settings can be configured by modifying the `Distillation
 ### License
 
 This project is released under the MIT License, see the `LICENSE` file for details.
+
+### Acknowledgements
+
+This project is part of a Bachelor Thesis at Delft University of Technology.
+Special thanks to the Software Engineering Research Group (SERG) from the EEMCS Faculty at TU Delft and to my
+supervisors: Professor Mitchell Olsthoorn and Professor Annibale Panichella for their guidance and support throughout
+the project.
+
+### Citation
+
+```bibtex
+@software{distilt5_2025,
+    author = {Andrei Vlad Nicula},
+    title = {DistilT5: Distilled CodeT5 for Assertion Generation},
+    version = {v1.0.1},
+    date = {2025},
+    publisher = {Zenodo},
+    doi = {10.5281/zenodo.15707159},
+    url = {https://github.com/AndreyVLD/DistilT5},
+}
+```
+
